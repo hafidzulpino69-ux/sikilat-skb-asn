@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, ArrowRight, Zap } from "lucide-react";
+import { Menu, X, ArrowRight, Zap, Trophy } from "lucide-react";
 import BrandLogo from "./BrandLogo";
 
 export default function Navbar() {
@@ -21,19 +21,13 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#042E64]/80">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#042E64]/80">
             <Link
               href="/"
               className="text-[#FB6E09] font-bold border-b-2 border-[#FB6E09] pb-0.5 transition-colors"
             >
               Beranda
             </Link>
-            <a
-              href="#keunggulan"
-              className="hover:text-[#FB6E09] transition-colors"
-            >
-              Fitur CAT
-            </a>
             <a
               href="#promo-section"
               className="hover:text-[#FB6E09] transition-colors flex items-center gap-1.5"
@@ -42,6 +36,19 @@ export default function Navbar() {
               <span className="bg-[#FB6E09] text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-md shadow-2xs">
                 HEMAT 25%
               </span>
+            </a>
+            <a
+              href="#leaderboard-section"
+              className="hover:text-[#FB6E09] transition-colors flex items-center gap-1"
+            >
+              <span>Peringkat</span>
+              <Trophy className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+            </a>
+            <a
+              href="#keunggulan"
+              className="hover:text-[#FB6E09] transition-colors"
+            >
+              Fitur CAT
             </a>
             <a
               href="#faq"
@@ -116,6 +123,21 @@ export default function Navbar() {
               <span className="bg-[#FB6E09] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                 Hemat 25%
               </span>
+            </a>
+            <a
+              href="#leaderboard-section"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-xl hover:bg-[#F4E3CB] flex items-center justify-between"
+            >
+              <span>Papan Peringkat (Top 5)</span>
+              <Trophy className="w-4 h-4 text-amber-500 fill-amber-400" />
+            </a>
+            <a
+              href="#keunggulan"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-xl hover:bg-[#F4E3CB]"
+            >
+              Fitur CAT BKN
             </a>
             <a
               href="#faq"

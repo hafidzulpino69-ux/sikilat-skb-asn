@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import PromoSection from "@/components/PromoSection";
+import LeaderboardSection from "@/components/LeaderboardSection";
 import FeaturesSection from "@/components/FeaturesSection";
 import Footer from "@/components/Footer";
 
@@ -11,6 +12,7 @@ export default function HomePage() {
       <main className="flex-1">
         <HeroSection />
         <PromoSection />
+        <LeaderboardSection />
         <FeaturesSection />
       </main>
       <Footer />
