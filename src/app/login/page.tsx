@@ -102,10 +102,8 @@ function LoginForm() {
               <span className="font-black text-[#FB6E09]">Paket Dipilih: </span>
               <strong>
                 {selectedPackage === "bundling-skb"
-                  ? "Paket Bundling SKB (Rp45.000 / 3 Paket Ujian)"
-                  : selectedPackage === "paket-satuan"
-                  ? "Paket Satuan SKB (Rp20.000)"
-                  : "Paket VIP Mentoring (Rp99.000)"}
+                  ? "Paket Bundling SKB (Rp80.000 / 3 Paket Ujian)"
+                  : "SKB Formasi (Rp30.000)"}
               </strong>
               <div className="text-[11px] text-[#042E64]/70 mt-0.5 font-medium">
                 Silakan masuk atau daftar untuk melanjutkan pengerjaan tryout.

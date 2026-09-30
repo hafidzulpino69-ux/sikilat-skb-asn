@@ -34,24 +34,29 @@ export default function PromoSection() {
           </p>
         </div>
 
-        {/* Promo Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+        {/* Promo Grid (2 Kolom: Paket Satuan dan Paket Bundling) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch max-w-4xl mx-auto">
           {/* Card 1: Paket Starter (Satuan) */}
-          <div className="bg-white rounded-3xl p-6 sm:p-7 border-2 border-[#F0DCBE] flex flex-col justify-between hover:shadow-lg transition-shadow">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#F0DCBE] flex flex-col justify-between hover:shadow-lg transition-shadow">
             <div>
               <div className="text-xs font-black text-[#FB6E09] uppercase tracking-wider mb-1">
                 Latihan Mandiri
               </div>
-              <h3 className="text-xl font-black text-[#042E64]">Paket Satuan SKB</h3>
+              <h3 className="text-2xl font-black text-[#042E64]">SKB Formasi</h3>
               <p className="text-xs text-[#042E64]/70 mt-1 mb-4 font-medium">
-                Cocok untuk evaluasi kilat 1 paket formasi teknis pilihan.
+                Materi Uji Pokok Teknis Jabatan formasi pilihan sesuai kisi-kisi resmi Kemenpan-RB.
               </p>
 
               {/* Price */}
               <div className="py-4 border-y border-[#F0DCBE]">
-                <div className="text-xs text-[#042E64]/40 line-through font-semibold">Rp30.000</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#042E64]/40 line-through font-semibold">Rp35.000</span>
+                  <span className="bg-[#FB6E09]/20 text-[#FB6E09] text-[10px] font-black px-1.5 py-0.5 rounded border border-[#FB6E09]/30">
+                    Promo Hemat
+                  </span>
+                </div>
                 <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-2xl sm:text-3xl font-black text-[#042E64]">Rp20.000</span>
+                  <span className="text-3xl font-black text-[#042E64]">Rp30.000</span>
                   <span className="text-xs text-[#042E64]/70 font-semibold">/ 1 Paket</span>
                 </div>
               </div>
@@ -60,15 +65,15 @@ export default function PromoSection() {
               <ul className="py-5 space-y-3 text-xs sm:text-sm text-[#042E64]/85">
                 <li className="flex items-center gap-2.5">
                   <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>1x Simulasi Ujian CAT BKN (100 Soal)</span>
+                  <span>100 butir soal CAT BKN</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>Kunci Jawaban & Pembahasan Singkat</span>
+                  <span>Waktu ujian selama 90 menit</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>Masa Aktif 30 Hari</span>
+                  <span>Kunci jawaban dan pembahasan detail</span>
                 </li>
               </ul>
             </div>
@@ -87,32 +92,32 @@ export default function PromoSection() {
             {/* Top Highlight Badge */}
             <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FB6E09] text-white text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 whitespace-nowrap">
               <Sparkles className="w-3.5 h-3.5 fill-white" />
-              <span>Paling Populer & Hemat 25%</span>
+              <span>Paling Populer &amp; Hemat</span>
             </div>
 
             <div>
               <div className="text-xs font-black text-[#FB6E09] uppercase tracking-wider mb-1 mt-2">
                 Pilihan Terbaik Pejuang ASN
               </div>
-              <h3 className="text-2xl font-black text-white">Paket Bundling SKB</h3>
+              <h3 className="text-2xl font-black text-white">Paket Bundling (Paket 1, 2, dan 3)</h3>
               <p className="text-xs text-blue-200 mt-1 mb-5">
-                3 Paket Ujian Terpadu mencakup aspek teknis jabatan, manajerial & sosio-kultural, serta simulasi penuh CAT BKN.
+                Materi Uji Pokok Teknis Jabatan lengkap 3 sesi simulasi CAT terpadu sesuai kisi-kisi resmi Kemenpan-RB.
               </p>
 
               {/* Price Box */}
               <div className="py-4 border-y border-[#0B3E84] bg-white/5 rounded-2xl px-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-300 line-through font-semibold">Rp60.000</span>
+                  <span className="text-xs text-slate-300 line-through font-semibold">Rp105.000</span>
                   <span className="bg-[#FB6E09]/30 text-[#FB6E09] text-[10px] font-black px-2 py-0.5 rounded-md border border-[#FB6E09]/40">
-                    Hemat Rp15.000
+                    Hemat Rp25.000
                   </span>
                 </div>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">Rp45.000</span>
+                  <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">Rp80.000</span>
                   <span className="text-xs text-blue-200 font-semibold">/ 3 Paket Ujian</span>
                 </div>
                 <div className="text-[11px] text-amber-300 mt-1 font-bold">
-                  ✓ Termasuk seluruh update materi Permenpan-RB 2026
+                  ✓ Mendapatkan Paket 1, 2, dan 3 secara terpadu
                 </div>
               </div>
 
@@ -122,40 +127,26 @@ export default function PromoSection() {
                   <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
-                  <span>
-                    <strong className="text-white">3 Paket Ujian Lengkap:</strong> SKB Teknis, SKB Manajerial/Sosio-Kultural, Simulasi CAT BKN
-                  </span>
+                  <span>100 butir soal CAT BKN</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
-                  <span>
-                    <strong className="text-white">300 Soal CAT BKN:</strong> Disesuaikan kisi-kisi resmi dan FR terbaru
-                  </span>
+                  <span>Waktu ujian selama 90 menit</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
-                  <span>
-                    <strong className="text-white">Pembahasan Lengkap:</strong> Disertai trik pengerjaan kilat 30 detik
-                  </span>
+                  <span>Kunci jawaban dan pembahasan detail</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
-                  <span>
-                    <strong className="text-white">Ranking Nasional Real-Time:</strong> Pantau posisimu di antara pesaing instansi
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <span>
-                    <strong className="text-white">Masa Aktif Selamanya:</strong> Ulangi pengerjaan kapan pun dibutuhkan
+                  <span className="text-amber-300 font-bold">
+                    Akses ke Grup Diskusi Telegram Eksklusif
                   </span>
                 </li>
               </ul>
@@ -175,52 +166,6 @@ export default function PromoSection() {
                 Akses langsung aktif seketika setelah login di SIKILAT SKB ASN
               </p>
             </div>
-          </div>
-
-          {/* Card 3: Paket VIP Mentoring */}
-          <div className="bg-white rounded-3xl p-6 sm:p-7 border-2 border-[#F0DCBE] flex flex-col justify-between hover:shadow-lg transition-shadow">
-            <div>
-              <div className="text-xs font-black text-[#FB6E09] uppercase tracking-wider mb-1">
-                Bimbingan Intensif
-              </div>
-              <h3 className="text-xl font-black text-[#042E64]">Paket VIP + Mentoring</h3>
-              <p className="text-xs text-[#042E64]/70 mt-1 mb-4 font-medium">
-                Tryout lengkap disertai sesi webinar bedah soal bersama mentor ASN.
-              </p>
-
-              {/* Price */}
-              <div className="py-4 border-y border-[#F0DCBE]">
-                <div className="text-xs text-[#042E64]/40 line-through font-semibold">Rp150.000</div>
-                <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-2xl sm:text-3xl font-black text-[#042E64]">Rp99.000</span>
-                  <span className="text-xs text-[#042E64]/70 font-semibold">/ All-in</span>
-                </div>
-              </div>
-
-              {/* Features List */}
-              <ul className="py-5 space-y-3 text-xs sm:text-sm text-[#042E64]/85">
-                <li className="flex items-center gap-2.5">
-                  <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>Semua fitur Paket Bundling SKB</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>3x Rekaman Live Webinar Bedah FR SKB</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
-                  <span>Grup Diskusi Telegram Eksklusif</span>
-                </li>
-              </ul>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleBuy("paket-vip")}
-              className="w-full mt-4 py-3.5 px-4 rounded-xl font-bold text-sm text-[#042E64] bg-[#FCF4E7] hover:bg-[#F4E3CB] border border-[#F0DCBE] transition-colors cursor-pointer"
-            >
-              Beli Paket VIP
-            </button>
           </div>
         </div>
 

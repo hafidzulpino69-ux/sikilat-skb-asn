@@ -578,7 +578,7 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between gap-1 mb-2">
                         {isBundling ? (
                           <span className="bg-[#FB6E09] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-xs">
-                            <Sparkles className="w-3 h-3 fill-white" /> Diskon 25%
+                            <Sparkles className="w-3 h-3 fill-white" /> Hemat Rp25.000
                           </span>
                         ) : (
                           <span
@@ -588,7 +588,7 @@ export default function DashboardPage() {
                                 : "bg-[#FCF4E7] text-[#042E64]/70"
                             }`}
                           >
-                            Satuan
+                            {pkg.label}
                           </span>
                         )}
 
@@ -603,18 +603,24 @@ export default function DashboardPage() {
                       <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black uppercase tracking-wider text-[#FB6E09]">
-                            {pkg.label}
+                            {isBundling ? "Paket Bundling" : pkg.label}
                           </span>
                         </div>
 
-                        {/* Isi / Sub-Judul: SKB Formasi */}
+                        {/* Isi / Sub-Judul: SKB Formasi (Ganti 'Paket 1', 'Paket 2', dll. menjadi ini) */}
                         <div
                           className={`text-lg font-black leading-tight ${
                             isBundling ? "text-white" : "text-[#042E64]"
                           }`}
                         >
-                          SKB Formasi
+                          {isBundling ? "Paket Bundling (Paket 1, 2, dan 3)" : "SKB Formasi"}
                         </div>
+
+                        {isBundling && (
+                          <div className="text-xs font-bold text-[#FB6E09]">
+                            Mendapatkan Paket 1, 2, dan 3
+                          </div>
+                        )}
 
                         {/* Keterangan kecil (Deskripsi) */}
                         <p
@@ -625,7 +631,7 @@ export default function DashboardPage() {
                           {pkg.description}
                         </p>
 
-                        {/* Harga: Efek harga coret Rp35.000, lalu tampilkan harga promo Rp30.000 */}
+                        {/* Harga: Efek harga coret, lalu tampilkan harga promo */}
                         <div
                           className={`py-3.5 my-2 border-y ${
                             isBundling ? "border-blue-900/80 bg-white/5 rounded-2xl px-3.5" : "border-[#F0DCBE] bg-[#FCF4E7]/40 rounded-2xl px-3.5"
@@ -637,7 +643,7 @@ export default function DashboardPage() {
                                 isBundling ? "text-blue-200" : "text-[#042E64]/40"
                               }`}
                             >
-                              Rp35.000
+                              Rp{pkg.originalPrice.toLocaleString("id-ID")}
                             </span>
                             <span className="bg-[#FB6E09]/20 text-[#FB6E09] text-[10px] font-black px-1.5 py-0.5 rounded border border-[#FB6E09]/30">
                               Promo Hemat
@@ -649,14 +655,14 @@ export default function DashboardPage() {
                                 isBundling ? "text-white" : "text-[#042E64]"
                               }`}
                             >
-                              Rp30.000
+                              Rp{pkg.price.toLocaleString("id-ID")}
                             </span>
                             <span
                               className={`text-xs font-medium ${
                                 isBundling ? "text-blue-200" : "text-[#042E64]/60"
                               }`}
                             >
-                              / Paket
+                              {isBundling ? "/ 3 Paket" : "/ Paket"}
                             </span>
                           </div>
                         </div>

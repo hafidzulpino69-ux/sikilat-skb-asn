@@ -84,8 +84,8 @@ export default function PaymentPage() {
           packageKey: "bundling",
           packageName: "Paket Bundling (Berisi Paket 1, 2, dan 3)",
           packageLabel: "Paket Bundling",
-          price: 30000,
-          originalPrice: 35000,
+          price: 80000,
+          originalPrice: 105000,
           examNumbers: [1, 2, 3],
           createdAt: new Date().toISOString(),
         });
@@ -99,17 +99,6 @@ export default function PaymentPage() {
 
     setTimeout(() => {
       if (typeof window !== "undefined") {
-        // Simpan ke daftar riwayat paket yang dibeli
-        const existingPackagesRaw = localStorage.getItem("skb_user_purchased_packages");
-        let existingPackages: any[] = [];
-        if (existingPackagesRaw) {
-          try {
-            existingPackages = JSON.parse(existingPackagesRaw);
-          } catch (e) {
-            existingPackages = [];
-          }
-        }
-
         const newPurchase = {
           id: `PURCHASE-${Date.now()}`,
           invoiceNumber,
@@ -124,9 +113,10 @@ export default function PaymentPage() {
           purchasedAt: new Date().toISOString(),
         };
 
-        // Tambahkan ke array dan simpan
-        existingPackages.unshift(newPurchase);
-        localStorage.setItem("skb_user_purchased_packages", JSON.stringify(existingPackages));
+        // Simpan paket yang baru dibeli sebagai paket aktif pengguna:
+        // Jika pengguna membeli Paket 1, maka hanya kotak Paket 1 yang muncul di 'Daftar Paket Anda'.
+        // Jika membeli Paket Bundling, barulah muncul ketiga kotak paket (Paket 1, 2, dan 3).
+        localStorage.setItem("skb_user_purchased_packages", JSON.stringify([newPurchase]));
       }
 
       setIsProcessing(false);

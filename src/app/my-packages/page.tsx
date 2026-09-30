@@ -41,46 +41,10 @@ interface ExamCardItem {
   durationMinutes: number;
 }
 
-// Default initial cards agar langsung tampil proporsional tanpa jeda
-const INITIAL_DEFAULT_CARDS: ExamCardItem[] = [
-  {
-    cardId: "default-exam-1",
-    examNumber: 1,
-    packageTitle: "Paket 1: SKB Kemampuan Teknis Formasi",
-    positionTitle: "Epidemiolog Kesehatan Ahli Pertama",
-    agencyName: "Kementerian Kesehatan RI",
-    score: 0,
-    status: "Belum Dikerjakan",
-    totalQuestions: 110,
-    durationMinutes: 100,
-  },
-  {
-    cardId: "default-exam-2",
-    examNumber: 2,
-    packageTitle: "Paket 2: SKB Manajerial & Wawancara",
-    positionTitle: "Epidemiolog Kesehatan Ahli Pertama",
-    agencyName: "Kementerian Kesehatan RI",
-    score: 0,
-    status: "Belum Dikerjakan",
-    totalQuestions: 110,
-    durationMinutes: 100,
-  },
-  {
-    cardId: "default-exam-3",
-    examNumber: 3,
-    packageTitle: "Paket 3: Simulasi Terpadu CAT BKN",
-    positionTitle: "Epidemiolog Kesehatan Ahli Pertama",
-    agencyName: "Kementerian Kesehatan RI",
-    score: 0,
-    status: "Belum Dikerjakan",
-    totalQuestions: 110,
-    durationMinutes: 100,
-  },
-];
-
 export default function MyPackagesPage() {
-  const [examCards, setExamCards] = useState<ExamCardItem[]>(INITIAL_DEFAULT_CARDS);
+  const [examCards, setExamCards] = useState<ExamCardItem[]>([]);
   const [justPurchased, setJustPurchased] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -100,60 +64,58 @@ export default function MyPackagesPage() {
 
       if (list.length > 0) {
         // =========================================================================
-        // LOGIKA PENTING:
-        // Jika yang dibeli adalah 'Paket Bundling', maka pecah menjadi 3 kotak terpisah
-        // (Paket 1, Paket 2, Paket 3).
-        // Jika paket satuan, tampilkan 1 kotak sesuai nomor paketnya.
+        // LOGIKA PENGERJAAN & TAMPILAN PAKET:
+        // Gunakan transaksi paket terbaru (list[0]) agar jika membeli Paket 1,
+        // HANYA Paket 1 yang muncul di halaman "Daftar Paket Anda".
+        // Jika membeli Paket Bundling, barulah muncul ketiga kotak (Paket 1, 2, 3).
         // =========================================================================
+        const currentPurchase = list[0];
         const cards: ExamCardItem[] = [];
+        const isBundling =
+          currentPurchase.packageKey === "bundling" || currentPurchase.examNumbers.length > 1;
 
-        list.forEach((purchase) => {
-          if (purchase.packageKey === "bundling" || purchase.examNumbers.length > 1) {
-            // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
-            purchase.examNumbers.forEach((num) => {
-              cards.push({
-                cardId: `${purchase.id}-exam-${num}`,
-                examNumber: num,
-                packageTitle:
-                  num === 1
-                    ? "Paket 1: SKB Kemampuan Teknis Formasi"
-                    : num === 2
-                    ? "Paket 2: SKB Manajerial & Wawancara"
-                    : "Paket 3: Simulasi Terpadu CAT BKN",
-                positionTitle: purchase.positionTitle,
-                agencyName: purchase.agencyName,
-                score: 0, // Nilai default 0 sesuai instruksi
-                status: "Belum Dikerjakan",
-                totalQuestions: 110,
-                durationMinutes: 100,
-              });
-            });
-          } else {
-            // Paket Satuan (hanya 1 kotak)
-            const num = purchase.examNumbers[0] || 1;
+        if (isBundling) {
+          // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
+          [1, 2, 3].forEach((num) => {
             cards.push({
-              cardId: `${purchase.id}-exam-${num}`,
+              cardId: `${currentPurchase.id}-exam-${num}`,
               examNumber: num,
-              packageTitle:
-                num === 1
-                  ? "Paket 1: SKB Kemampuan Teknis Formasi"
-                  : num === 2
-                  ? "Paket 2: SKB Manajerial & Wawancara"
-                  : "Paket 3: Simulasi Terpadu CAT BKN",
-              positionTitle: purchase.positionTitle,
-              agencyName: purchase.agencyName,
-              score: 0, // Nilai: 0
+              packageTitle: `Paket ${num}: SKB Formasi`,
+              positionTitle: currentPurchase.positionTitle,
+              agencyName: currentPurchase.agencyName,
+              score: 0, // Nilai default 0 sesuai instruksi
               status: "Belum Dikerjakan",
-              totalQuestions: 110,
-              durationMinutes: 100,
+              totalQuestions: 100,
+              durationMinutes: 90,
             });
-          }
-        });
+          });
+        } else {
+          // Paket Satuan (HANYA 1 kotak yang dibeli)
+          const num =
+            currentPurchase.packageKey === "paket-2"
+              ? 2
+              : currentPurchase.packageKey === "paket-3"
+              ? 3
+              : currentPurchase.examNumbers[0] || 1;
 
-        if (cards.length > 0) {
-          setExamCards(cards);
+          cards.push({
+            cardId: `${currentPurchase.id}-exam-${num}`,
+            examNumber: num,
+            packageTitle: `Paket ${num}: SKB Formasi`,
+            positionTitle: currentPurchase.positionTitle,
+            agencyName: currentPurchase.agencyName,
+            score: 0, // Nilai: 0
+            status: "Belum Dikerjakan",
+            totalQuestions: 100,
+            durationMinutes: 90,
+          });
         }
+
+        setExamCards(cards);
+      } else {
+        setExamCards([]);
       }
+      setIsLoaded(true);
     }
   }, []);
 
@@ -238,72 +200,93 @@ export default function MyPackagesPage() {
         {/* ========================================================================= */}
         {/* GRID KOTAK PAKET (HASIL LOGIKA PEMECAHAN PAKET BUNDLING ATAU SATUAN)     */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {examCards.map((card) => (
-            <div
-              key={card.cardId}
-              className="bg-white rounded-3xl border-3 border-[#F0DCBE] hover:border-[#FB6E09]/70 shadow-md hover:shadow-xl transition-all flex flex-col justify-between overflow-hidden relative"
-            >
-              {/* Top Banner Tag */}
-              <div className="bg-[#042E64] text-white px-5 py-3 flex items-center justify-between border-b-2 border-[#FB6E09]">
-                <span className="text-xs font-black text-[#FB6E09] uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 fill-[#FB6E09]" />
-                  Paket {card.examNumber}
-                </span>
-                <span className="text-[11px] font-bold text-blue-200">
-                  {card.totalQuestions} Soal • {card.durationMinutes} Menit
-                </span>
-              </div>
-
-              <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug">
-                    {card.packageTitle}
-                  </h3>
-
-                  {/* TEKS INSTRUKSI SPESIFIK SESUAI PERMINTAAN USER: */}
-                  {/* 'Kerjakan paket soal [Nomor] dengan jabatan [Nama Jabatan] Instansi [Nama Instansi]' */}
-                  <div className="p-3.5 rounded-2xl bg-[#FCF4E7] border border-[#F0DCBE] text-xs text-[#042E64] leading-relaxed font-semibold">
-                    Kerjakan paket soal <strong>{card.examNumber}</strong> dengan jabatan{" "}
-                    <strong className="text-[#FB6E09]">{card.positionTitle}</strong> Instansi{" "}
-                    <strong>{card.agencyName}</strong>.
-                  </div>
+        {isLoaded && examCards.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border-2 border-[#F0DCBE] max-w-xl mx-auto space-y-4 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-[#FB6E09]/15 text-[#FB6E09] flex items-center justify-center mx-auto">
+              <PackageOpen className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-[#042E64]">Belum Ada Paket Soal Aktif</h3>
+            <p className="text-xs sm:text-sm text-[#042E64]/70 max-w-md mx-auto font-medium">
+              Anda belum memiliki paket soal aktif. Silakan pilih instansi, jabatan, dan paket latihan mandiri atau paket bundling di dashboard.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] shadow-md shadow-[#FB6E09]/30 transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Pilih &amp; Beli Paket Sekarang</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {examCards.map((card) => (
+              <div
+                key={card.cardId}
+                className="bg-white rounded-3xl border-3 border-[#F0DCBE] hover:border-[#FB6E09]/70 shadow-md hover:shadow-xl transition-all flex flex-col justify-between overflow-hidden relative"
+              >
+                {/* Top Banner Tag */}
+                <div className="bg-[#042E64] text-white px-5 py-3 flex items-center justify-between border-b-2 border-[#FB6E09]">
+                  <span className="text-xs font-black text-[#FB6E09] uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 fill-[#FB6E09]" />
+                    Paket {card.examNumber}
+                  </span>
+                  <span className="text-[11px] font-bold text-blue-200">
+                    {card.totalQuestions} Soal • {card.durationMinutes} Menit
+                  </span>
                 </div>
 
-                {/* KETERANGAN NILAI: 0 (KARENA BELUM DIKERJAKAN) */}
-                <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Award className="w-5 h-5 text-[#FB6E09]" />
-                    <div>
-                      <div className="text-[10px] text-[#042E64]/60 uppercase font-black tracking-wider">
-                        Perolehan Skor
-                      </div>
-                      <div className="text-lg font-black text-[#042E64]">
-                        Nilai: <span className="text-[#FB6E09]">{card.score}</span>
-                      </div>
+                <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug">
+                      {card.packageTitle}
+                    </h3>
+
+                    {/* TEKS INSTRUKSI SPESIFIK SESUAI PERMINTAAN USER: */}
+                    {/* 'Kerjakan paket soal [Nomor] dengan jabatan [Nama Jabatan] Instansi [Nama Instansi]' */}
+                    <div className="p-3.5 rounded-2xl bg-[#FCF4E7] border border-[#F0DCBE] text-xs text-[#042E64] leading-relaxed font-semibold">
+                      Kerjakan paket soal <strong>{card.examNumber}</strong> dengan jabatan{" "}
+                      <strong className="text-[#FB6E09]">{card.positionTitle}</strong> Instansi{" "}
+                      <strong>{card.agencyName}</strong>.
                     </div>
                   </div>
 
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
-                    ● {card.status}
-                  </span>
+                  {/* KETERANGAN NILAI: 0 (KARENA BELUM DIKERJAKAN) */}
+                  <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-5 h-5 text-[#FB6E09]" />
+                      <div>
+                        <div className="text-[10px] text-[#042E64]/60 uppercase font-black tracking-wider">
+                          Perolehan Skor
+                        </div>
+                        <div className="text-lg font-black text-[#042E64]">
+                          Nilai: <span className="text-[#FB6E09]">{card.score}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
+                      ● {card.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* TOMBOL 'KERJAKAN UJIAN' */}
+                <div className="p-5 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
+                  <button
+                    type="button"
+                    onClick={() => handleStartExam(card)}
+                    className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    <span>Kerjakan Ujian</span>
+                  </button>
                 </div>
               </div>
-
-              {/* TOMBOL 'KERJAKAN UJIAN' */}
-              <div className="p-5 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
-                <button
-                  type="button"
-                  onClick={() => handleStartExam(card)}
-                  className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  <span>Kerjakan Ujian</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Informasi Bantuan */}
         <div className="p-5 rounded-3xl bg-white border-2 border-[#F0DCBE] text-[#042E64] flex items-start gap-3.5 text-xs sm:text-sm shadow-xs">
