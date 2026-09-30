@@ -11,8 +11,19 @@ import {
   ArrowLeft,
   Sparkles,
   AlertCircle,
+  Clock,
+  RotateCcw,
+  Timer,
+  ShieldAlert,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+
+// =========================================================================
+// PENGATURAN DURASI MASA AKTIF PAKET:
+// KHUSUS UNTUK TESTING SAAT INI: 1 Menit (60 detik = 60 * 1000 ms)
+// UBAH KE 90 HARI DI SINI: ganti (60 * 1000) menjadi (90 * 24 * 60 * 60 * 1000)
+// =========================================================================
+export const PACKAGE_VALIDITY_DURATION_MS = 60 * 1000; // <-- UBAH KE 90 HARI DI SINI: (90 * 24 * 60 * 60 * 1000)
 
 interface PurchasedItem {
   id: string;
@@ -26,25 +37,39 @@ interface PurchasedItem {
   price: number;
   examNumbers: number[];
   purchasedAt: string;
+  expiresAt?: string;
+  durationMs?: number;
 }
 
 // Representasi kartu paket yang dipecah untuk dikerjakan
 interface ExamCardItem {
   cardId: string;
+  purchaseId: string;
   examNumber: number;
   packageTitle: string;
   positionTitle: string;
   agencyName: string;
   score: number;
-  status: "Belum Dikerjakan" | "Selesai";
+  status: "Belum Dikerjakan" | "Selesai" | "Hangus";
   totalQuestions: number;
   durationMinutes: number;
+  purchasedAt: string;
+  expiresAt: string;
 }
 
 export default function MyPackagesPage() {
   const [examCards, setExamCards] = useState<ExamCardItem[]>([]);
   const [justPurchased, setJustPurchased] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  // Interval real-time countdown setiap detik (1000ms)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -54,7 +79,7 @@ export default function MyPackagesPage() {
       if (raw) {
         try {
           list = JSON.parse(raw);
-          if (list.length > 0) {
+          if (Array.isArray(list) && list.length > 0) {
             setJustPurchased(true);
           }
         } catch (e) {
@@ -62,54 +87,71 @@ export default function MyPackagesPage() {
         }
       }
 
-      if (list.length > 0) {
+      if (Array.isArray(list) && list.length > 0) {
         // =========================================================================
-        // LOGIKA PENGERJAAN & TAMPILAN PAKET:
-        // Gunakan transaksi paket terbaru (list[0]) agar jika membeli Paket 1,
-        // HANYA Paket 1 yang muncul di halaman "Daftar Paket Anda".
-        // Jika membeli Paket Bundling, barulah muncul ketiga kotak (Paket 1, 2, 3).
+        // LOGIKA PENGERJAAN & TAMPILAN PAKET (APPEND MODE):
+        // Setiap transaksi baru DITAMBAHKAN (append) ke dalam daftar, bukan menimpa yang lama.
+        // - Paket Satuan (Paket 1, 2, atau 3): menghasilkan 1 kotak paket yang dibeli.
+        // - Paket Bundling: menghasilkan 3 kotak terpisah (Paket 1, Paket 2, Paket 3).
         // =========================================================================
-        const currentPurchase = list[0];
         const cards: ExamCardItem[] = [];
-        const isBundling =
-          currentPurchase.packageKey === "bundling" || currentPurchase.examNumbers.length > 1;
 
-        if (isBundling) {
-          // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
-          [1, 2, 3].forEach((num) => {
+        list.forEach((purchase) => {
+          const purchasedTime = purchase.purchasedAt
+            ? new Date(purchase.purchasedAt).getTime()
+            : Date.now();
+
+          // Gunakan expiresAt yang tersimpan atau hitung berdasarkan waktu beli + durasi
+          const expiresTime = purchase.expiresAt
+            ? new Date(purchase.expiresAt).getTime()
+            : purchasedTime + PACKAGE_VALIDITY_DURATION_MS;
+
+          const isBundling =
+            purchase.packageKey === "bundling" || purchase.examNumbers.length > 1;
+
+          if (isBundling) {
+            // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
+            [1, 2, 3].forEach((num) => {
+              cards.push({
+                cardId: `${purchase.id}-exam-${num}`,
+                purchaseId: purchase.id,
+                examNumber: num,
+                packageTitle: `Paket ${num}: SKB Formasi`,
+                positionTitle: purchase.positionTitle,
+                agencyName: purchase.agencyName,
+                score: 0, // Nilai default 0 sesuai instruksi
+                status: "Belum Dikerjakan",
+                totalQuestions: 100,
+                durationMinutes: 90,
+                purchasedAt: new Date(purchasedTime).toISOString(),
+                expiresAt: new Date(expiresTime).toISOString(),
+              });
+            });
+          } else {
+            // Paket Satuan (HANYA 1 kotak yang dibeli per transaksi)
+            const num =
+              purchase.packageKey === "paket-2"
+                ? 2
+                : purchase.packageKey === "paket-3"
+                ? 3
+                : purchase.examNumbers[0] || 1;
+
             cards.push({
-              cardId: `${currentPurchase.id}-exam-${num}`,
+              cardId: `${purchase.id}-exam-${num}`,
+              purchaseId: purchase.id,
               examNumber: num,
               packageTitle: `Paket ${num}: SKB Formasi`,
-              positionTitle: currentPurchase.positionTitle,
-              agencyName: currentPurchase.agencyName,
-              score: 0, // Nilai default 0 sesuai instruksi
+              positionTitle: purchase.positionTitle,
+              agencyName: purchase.agencyName,
+              score: 0, // Nilai: 0
               status: "Belum Dikerjakan",
               totalQuestions: 100,
               durationMinutes: 90,
+              purchasedAt: new Date(purchasedTime).toISOString(),
+              expiresAt: new Date(expiresTime).toISOString(),
             });
-          });
-        } else {
-          // Paket Satuan (HANYA 1 kotak yang dibeli)
-          const num =
-            currentPurchase.packageKey === "paket-2"
-              ? 2
-              : currentPurchase.packageKey === "paket-3"
-              ? 3
-              : currentPurchase.examNumbers[0] || 1;
-
-          cards.push({
-            cardId: `${currentPurchase.id}-exam-${num}`,
-            examNumber: num,
-            packageTitle: `Paket ${num}: SKB Formasi`,
-            positionTitle: currentPurchase.positionTitle,
-            agencyName: currentPurchase.agencyName,
-            score: 0, // Nilai: 0
-            status: "Belum Dikerjakan",
-            totalQuestions: 100,
-            durationMinutes: 90,
-          });
-        }
+          }
+        });
 
         setExamCards(cards);
       } else {
@@ -119,7 +161,62 @@ export default function MyPackagesPage() {
     }
   }, []);
 
+  // Helper kalkulasi sisa waktu (Hari, Jam, Menit, Detik)
+  const calculateTimeLeft = (expiresAtStr: string) => {
+    const expiresMs = new Date(expiresAtStr).getTime();
+    const diffMs = Math.max(0, expiresMs - currentTime);
+    const isExpired = diffMs <= 0;
+
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return {
+      diffMs,
+      isExpired,
+      days,
+      hours,
+      minutes,
+      seconds,
+    };
+  };
+
+  // Helper perpanjang timer khusus testing (+1 Menit)
+  const handleResetTestingTimer = () => {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("skb_user_purchased_packages");
+      if (raw) {
+        try {
+          const list: PurchasedItem[] = JSON.parse(raw);
+          const newExpiresAt = new Date(Date.now() + PACKAGE_VALIDITY_DURATION_MS).toISOString();
+          list.forEach((item) => {
+            item.expiresAt = newExpiresAt;
+          });
+          localStorage.setItem("skb_user_purchased_packages", JSON.stringify(list));
+
+          setExamCards((prev) =>
+            prev.map((c) => ({
+              ...c,
+              expiresAt: newExpiresAt,
+            }))
+          );
+          setCurrentTime(Date.now());
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  };
+
   const handleStartExam = (card: ExamCardItem) => {
+    const timeLeft = calculateTimeLeft(card.expiresAt);
+    if (timeLeft.isExpired) {
+      alert("Maaf, masa aktif paket ini telah habis (Paket Hangus). Silakan lakukan pembelian ulang.");
+      return;
+    }
+
     alert(
       `[SIKILAT CAT Engine]\n\nKerjakan paket soal ${card.examNumber} dengan jabatan ${card.positionTitle} Instansi ${card.agencyName}\n\nNilai: ${card.score} (Belum dikerjakan)\nJumlah Soal: ${card.totalQuestions} • Waktu: ${card.durationMinutes} Menit.\n\n(Alur Pembelian Paket Selesai. Siap lanjut ke Poin 2!)`
     );
@@ -148,6 +245,34 @@ export default function MyPackagesPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Banner Testing Info Khusus Durasi 1 Menit */}
+        <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <Timer className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-black text-amber-900 block">
+                Mode Pengujian Hitung Mundur Aktif (Testing: 1 Menit / 60 Detik)
+              </span>
+              <span className="text-amber-800/80 font-medium">
+                Durasi disetel 1 Menit agar Anda dapat memantau transisi tombol menjadi <strong>&quot;Paket Hangus&quot;</strong> secara instan.
+                Ganti ke 90 hari pada kode yang bertanda: <code>// UBAH KE 90 HARI DI SINI</code>.
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleResetTestingTimer}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-bold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer whitespace-nowrap"
+            title="Perbarui hitungan mundur ke 1 menit lagi untuk uji coba ulang"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+            <span>Reset Timer (+1 Menit Testing)</span>
+          </button>
+        </div>
+
         {/* Banner Sukses Pembayaran jika baru saja checkout */}
         {justPurchased && (
           <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
@@ -157,10 +282,10 @@ export default function MyPackagesPage() {
               </div>
               <div>
                 <div className="text-sm font-black text-emerald-950">
-                  Pembayaran Berhasil Dikonfirmasi!
+                  Paket Berhasil Ditambahkan ke Akun Anda!
                 </div>
                 <div className="text-xs text-emerald-800 font-medium">
-                  Paket soal Anda telah aktif dan siap dikerjakan di bawah ini.
+                  Paket soal Anda telah aktif dengan masa aktif 90 hari (sedang dalam mode testing 1 menit).
                 </div>
               </div>
             </div>
@@ -184,7 +309,7 @@ export default function MyPackagesPage() {
               Paket Soal Ujian yang Anda Miliki
             </h1>
             <p className="text-xs sm:text-sm text-[#042E64]/70 font-medium">
-              Berikut adalah daftar kotak paket soal yang siap Anda kerjakan dengan sistem CAT BKN.
+              Daftar seluruh paket soal yang Anda miliki. Setiap pembelian baru akan otomatis ditambahkan ke daftar ini.
             </p>
           </div>
 
@@ -198,7 +323,7 @@ export default function MyPackagesPage() {
         </div>
 
         {/* ========================================================================= */}
-        {/* GRID KOTAK PAKET (HASIL LOGIKA PEMECAHAN PAKET BUNDLING ATAU SATUAN)     */}
+        {/* GRID KOTAK PAKET (APPEND MODE & REAL-TIME COUNTDOWN TIMER)               */}
         {/* ========================================================================= */}
         {isLoaded && examCards.length === 0 ? (
           <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border-2 border-[#F0DCBE] max-w-xl mx-auto space-y-4 shadow-sm">
@@ -221,82 +346,214 @@ export default function MyPackagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {examCards.map((card) => (
-              <div
-                key={card.cardId}
-                className="bg-white rounded-3xl border-3 border-[#F0DCBE] hover:border-[#FB6E09]/70 shadow-md hover:shadow-xl transition-all flex flex-col justify-between overflow-hidden relative"
-              >
-                {/* Top Banner Tag */}
-                <div className="bg-[#042E64] text-white px-5 py-3 flex items-center justify-between border-b-2 border-[#FB6E09]">
-                  <span className="text-xs font-black text-[#FB6E09] uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 fill-[#FB6E09]" />
-                    Paket {card.examNumber}
-                  </span>
-                  <span className="text-[11px] font-bold text-blue-200">
-                    {card.totalQuestions} Soal • {card.durationMinutes} Menit
-                  </span>
-                </div>
+            {examCards.map((card) => {
+              const timeLeft = calculateTimeLeft(card.expiresAt);
+              const isExpired = timeLeft.isExpired;
 
-                <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug">
-                      {card.packageTitle}
-                    </h3>
-
-                    {/* TEKS INSTRUKSI SPESIFIK SESUAI PERMINTAAN USER: */}
-                    {/* 'Kerjakan paket soal [Nomor] dengan jabatan [Nama Jabatan] Instansi [Nama Instansi]' */}
-                    <div className="p-3.5 rounded-2xl bg-[#FCF4E7] border border-[#F0DCBE] text-xs text-[#042E64] leading-relaxed font-semibold">
-                      Kerjakan paket soal <strong>{card.examNumber}</strong> dengan jabatan{" "}
-                      <strong className="text-[#FB6E09]">{card.positionTitle}</strong> Instansi{" "}
-                      <strong>{card.agencyName}</strong>.
-                    </div>
+              return (
+                <div
+                  key={card.cardId}
+                  className={`bg-white rounded-3xl border-3 transition-all flex flex-col justify-between overflow-hidden relative shadow-md hover:shadow-xl ${
+                    isExpired
+                      ? "border-slate-300 opacity-85"
+                      : "border-[#F0DCBE] hover:border-[#FB6E09]/70"
+                  }`}
+                >
+                  {/* Top Banner Tag */}
+                  <div
+                    className={`px-5 py-3 flex items-center justify-between border-b-2 ${
+                      isExpired
+                        ? "bg-slate-700 text-slate-200 border-slate-500"
+                        : "bg-[#042E64] text-white border-[#FB6E09]"
+                    }`}
+                  >
+                    <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1 text-[#FB6E09]">
+                      <Sparkles className="w-3.5 h-3.5 fill-[#FB6E09]" />
+                      Paket {card.examNumber}
+                    </span>
+                    <span className="text-[11px] font-bold text-blue-200">
+                      {card.totalQuestions} Soal • {card.durationMinutes} Menit
+                    </span>
                   </div>
 
-                  {/* KETERANGAN NILAI: 0 (KARENA BELUM DIKERJAKAN) */}
-                  <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-5 h-5 text-[#FB6E09]" />
-                      <div>
-                        <div className="text-[10px] text-[#042E64]/60 uppercase font-black tracking-wider">
-                          Perolehan Skor
+                  <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug">
+                          {card.packageTitle}
+                        </h3>
+                      </div>
+
+                      {/* TEKS INSTRUKSI SPESIFIK SESUAI PERMINTAAN USER: */}
+                      {/* 'Kerjakan paket soal [Nomor] dengan jabatan [Nama Jabatan] Instansi [Nama Instansi]' */}
+                      <div className="p-3.5 rounded-2xl bg-[#FCF4E7] border border-[#F0DCBE] text-xs text-[#042E64] leading-relaxed font-semibold">
+                        Kerjakan paket soal <strong>{card.examNumber}</strong> dengan jabatan{" "}
+                        <strong className="text-[#FB6E09]">{card.positionTitle}</strong> Instansi{" "}
+                        <strong>{card.agencyName}</strong>.
+                      </div>
+
+                      {/* ================================================================= */}
+                      {/* UI HITUNG MUNDUR (COUNTDOWN) MASA BERLAKU: HARI, JAM, MENIT, DETIK */}
+                      {/* ================================================================= */}
+                      <div
+                        className={`p-3.5 rounded-2xl border transition-all ${
+                          isExpired
+                            ? "bg-rose-50 border-rose-200 text-rose-900"
+                            : "bg-[#FCF4E7]/80 border-amber-300/80 text-[#042E64]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-bold mb-2">
+                          <span className="flex items-center gap-1.5">
+                            <Clock
+                              className={`w-3.5 h-3.5 ${
+                                isExpired ? "text-rose-600" : "text-[#FB6E09] animate-pulse"
+                              }`}
+                            />
+                            <span>Masa Berlaku Paket:</span>
+                          </span>
+
+                          {isExpired ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-800 uppercase tracking-wider">
+                              Waktu Habis
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
+                              Aktif (Masa Aktif 90 Hari)
+                            </span>
+                          )}
                         </div>
-                        <div className="text-lg font-black text-[#042E64]">
-                          Nilai: <span className="text-[#FB6E09]">{card.score}</span>
+
+                        {/* Grid Countdown: Hari, Jam, Menit, Detik */}
+                        <div className="grid grid-cols-4 gap-1.5 text-center font-mono font-black">
+                          <div
+                            className={`p-1.5 rounded-xl border ${
+                              isExpired
+                                ? "bg-white text-rose-800 border-rose-200"
+                                : "bg-white text-[#042E64] border-[#F0DCBE]"
+                            }`}
+                          >
+                            <div className="text-sm sm:text-base leading-none">
+                              {String(timeLeft.days).padStart(2, "0")}
+                            </div>
+                            <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
+                              Hari
+                            </div>
+                          </div>
+
+                          <div
+                            className={`p-1.5 rounded-xl border ${
+                              isExpired
+                                ? "bg-white text-rose-800 border-rose-200"
+                                : "bg-white text-[#042E64] border-[#F0DCBE]"
+                            }`}
+                          >
+                            <div className="text-sm sm:text-base leading-none">
+                              {String(timeLeft.hours).padStart(2, "0")}
+                            </div>
+                            <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
+                              Jam
+                            </div>
+                          </div>
+
+                          <div
+                            className={`p-1.5 rounded-xl border ${
+                              isExpired
+                                ? "bg-white text-rose-800 border-rose-200"
+                                : "bg-white text-[#042E64] border-[#F0DCBE]"
+                            }`}
+                          >
+                            <div className="text-sm sm:text-base leading-none">
+                              {String(timeLeft.minutes).padStart(2, "0")}
+                            </div>
+                            <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
+                              Menit
+                            </div>
+                          </div>
+
+                          <div
+                            className={`p-1.5 rounded-xl border ${
+                              isExpired
+                                ? "bg-white text-rose-800 border-rose-200"
+                                : "bg-white text-[#FB6E09] border-[#FB6E09]/40"
+                            }`}
+                          >
+                            <div className="text-sm sm:text-base leading-none">
+                              {String(timeLeft.seconds).padStart(2, "0")}
+                            </div>
+                            <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
+                              Detik
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
-                      ● {card.status}
-                    </span>
+                    {/* KETERANGAN NILAI & STATUS KARTU */}
+                    <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-5 h-5 text-[#FB6E09]" />
+                        <div>
+                          <div className="text-[10px] text-[#042E64]/60 uppercase font-black tracking-wider">
+                            Perolehan Skor
+                          </div>
+                          <div className="text-lg font-black text-[#042E64]">
+                            Nilai: <span className="text-[#FB6E09]">{card.score}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {isExpired ? (
+                        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-1 rounded-full border border-rose-300">
+                          ● Paket Hangus
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
+                          ● {card.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ================================================================= */}
+                  {/* TOMBOL AKSI: 'KERJAKAN UJIAN' ATAU 'PAKET HANGUS' (DISABLED)      */}
+                  {/* ================================================================= */}
+                  <div className="p-5 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
+                    {isExpired ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-slate-400 bg-slate-200 border-2 border-slate-300 flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-none"
+                        title="Paket sudah tidak dapat dikerjakan karena masa aktif telah habis"
+                      >
+                        <ShieldAlert className="w-4 h-4 text-slate-400" />
+                        <span>Paket Hangus</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleStartExam(card)}
+                        className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                        <span>Kerjakan Ujian</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {/* TOMBOL 'KERJAKAN UJIAN' */}
-                <div className="p-5 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
-                  <button
-                    type="button"
-                    onClick={() => handleStartExam(card)}
-                    className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <PlayCircle className="w-4 h-4" />
-                    <span>Kerjakan Ujian</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* Informasi Bantuan */}
+        {/* Informasi Bantuan & Ketentuan */}
         <div className="p-5 rounded-3xl bg-white border-2 border-[#F0DCBE] text-[#042E64] flex items-start gap-3.5 text-xs sm:text-sm shadow-xs">
           <div className="w-9 h-9 rounded-xl bg-[#FB6E09]/15 text-[#FB6E09] flex items-center justify-center shrink-0">
             <AlertCircle className="w-5 h-5 text-[#FB6E09]" />
           </div>
           <div className="space-y-1">
-            <strong className="font-black text-[#042E64] text-sm">Ketentuan Pengerjaan Paket:</strong>
+            <strong className="font-black text-[#042E64] text-sm">Ketentuan Masa Berlaku Paket:</strong>
             <p className="text-[#042E64]/80 leading-relaxed font-medium">
-              Paket soal yang telah dibeli akan tersimpan permanen di akun Anda. Pada tahap selanjutnya (Poin 2), tombol <strong>&quot;Kerjakan Ujian&quot;</strong> akan menghubungkan Anda ke Mesin Ujian CAT BKN interaktif dengan 110 butir soal dan timer 100 menit.
+              Setiap paket soal memiliki masa aktif resmi selama <strong>90 Hari</strong> sejak waktu pembelian. Apabila masa aktif habis sebelum Anda menyelesaikan ujian, tombol pengerjaan otomatis berubah menjadi <strong>&quot;Paket Hangus&quot;</strong>.
             </p>
           </div>
         </div>

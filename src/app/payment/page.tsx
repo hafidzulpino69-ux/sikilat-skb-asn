@@ -37,6 +37,13 @@ interface PendingOrder {
   createdAt: string;
 }
 
+// =========================================================================
+// PENGATURAN DURASI MASA AKTIF PAKET:
+// KHUSUS UNTUK TESTING SAAT INI: 1 Menit (60 detik = 60 * 1000 ms)
+// UBAH KE 90 HARI DI SINI: ganti (60 * 1000) menjadi (90 * 24 * 60 * 60 * 1000)
+// =========================================================================
+export const PACKAGE_VALIDITY_DURATION_MS = 60 * 1000; // <-- UBAH KE 90 HARI DI SINI: (90 * 24 * 60 * 60 * 1000)
+
 export default function PaymentPage() {
   const router = useRouter();
   const [order, setOrder] = useState<PendingOrder | null>(null);
@@ -99,8 +106,11 @@ export default function PaymentPage() {
 
     setTimeout(() => {
       if (typeof window !== "undefined") {
+        const purchasedTime = Date.now();
+        const expiresTime = purchasedTime + PACKAGE_VALIDITY_DURATION_MS;
+
         const newPurchase = {
-          id: `PURCHASE-${Date.now()}`,
+          id: `PURCHASE-${purchasedTime}-${Math.floor(Math.random() * 1000)}`,
           invoiceNumber,
           agencyName: order.agencyName,
           agencyShortName: order.agencyShortName,
@@ -110,13 +120,25 @@ export default function PaymentPage() {
           packageName: order.packageName,
           price: order.price,
           examNumbers: order.examNumbers,
-          purchasedAt: new Date().toISOString(),
+          purchasedAt: new Date(purchasedTime).toISOString(),
+          expiresAt: new Date(expiresTime).toISOString(), // Timestamp kedaluwarsa untuk hitung mundur
         };
 
-        // Simpan paket yang baru dibeli sebagai paket aktif pengguna:
-        // Jika pengguna membeli Paket 1, maka hanya kotak Paket 1 yang muncul di 'Daftar Paket Anda'.
-        // Jika membeli Paket Bundling, barulah muncul ketiga kotak paket (Paket 1, 2, dan 3).
-        localStorage.setItem("skb_user_purchased_packages", JSON.stringify([newPurchase]));
+        // Ambil riwayat paket lama agar TIDAK tertimpa (append mode)
+        const existingRaw = localStorage.getItem("skb_user_purchased_packages");
+        let existingList: any[] = [];
+        if (existingRaw) {
+          try {
+            existingList = JSON.parse(existingRaw);
+            if (!Array.isArray(existingList)) existingList = [];
+          } catch (e) {
+            existingList = [];
+          }
+        }
+
+        // Tambahkan paket baru ke dalam riwayat (append)
+        existingList.push(newPurchase);
+        localStorage.setItem("skb_user_purchased_packages", JSON.stringify(existingList));
       }
 
       setIsProcessing(false);
@@ -274,6 +296,10 @@ export default function PaymentPage() {
               <div className="flex items-center justify-between text-xs text-[#042E64]/70">
                 <span>Biaya Layanan &amp; Verifikasi</span>
                 <span className="text-emerald-600 font-bold">Gratis (Rp0)</span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-[#042E64]/70">
+                <span>Masa Aktif Paket</span>
+                <span className="text-[#042E64] font-bold">90 Hari</span>
               </div>
               <div className="flex items-center justify-between text-base sm:text-lg font-black text-[#042E64] pt-3 border-t-2 border-[#F0DCBE]">
                 <span>Total Pembayaran</span>

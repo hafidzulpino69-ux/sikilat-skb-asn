@@ -75,6 +75,10 @@ export default function PromoSection() {
                   <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
                   <span>Kunci jawaban dan pembahasan detail</span>
                 </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#FB6E09] shrink-0" />
+                  <span>Masa aktif paket 90 hari</span>
+                </li>
               </ul>
             </div>
 
@@ -140,6 +144,12 @@ export default function PromoSection() {
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                   <span>Kunci jawaban dan pembahasan detail</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 stroke-[3]" />
+                  </div>
+                  <span>Masa aktif paket 90 hari</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">

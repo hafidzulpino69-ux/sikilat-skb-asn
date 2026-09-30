@@ -43,6 +43,7 @@ export function getPositionPackages(positionTitle: string): PositionPackage[] {
     "100 butir soal CAT BKN",
     "Waktu ujian selama 90 menit",
     "Kunci jawaban dan pembahasan detail",
+    "Masa aktif paket 90 hari",
   ];
 
   return [
