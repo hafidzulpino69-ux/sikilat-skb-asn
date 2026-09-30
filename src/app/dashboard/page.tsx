@@ -600,17 +600,23 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Header Box */}
-                      <div className="space-y-2">
-                        <div className="text-xs font-black uppercase tracking-wider text-[#FB6E09]">
-                          {pkg.label}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black uppercase tracking-wider text-[#FB6E09]">
+                            {pkg.label}
+                          </span>
                         </div>
-                        <h4
-                          className={`text-base font-black leading-snug ${
+
+                        {/* Isi / Sub-Judul: SKB Formasi */}
+                        <div
+                          className={`text-lg font-black leading-tight ${
                             isBundling ? "text-white" : "text-[#042E64]"
                           }`}
                         >
-                          {pkg.name}
-                        </h4>
+                          SKB Formasi
+                        </div>
+
+                        {/* Keterangan kecil (Deskripsi) */}
                         <p
                           className={`text-xs leading-relaxed font-medium ${
                             isBundling ? "text-blue-100" : "text-[#042E64]/70"
@@ -619,43 +625,66 @@ export default function DashboardPage() {
                           {pkg.description}
                         </p>
 
-                        {/* Price */}
+                        {/* Harga: Efek harga coret Rp35.000, lalu tampilkan harga promo Rp30.000 */}
                         <div
-                          className={`py-3 my-2 border-y ${
-                            isBundling ? "border-blue-900/80" : "border-[#F0DCBE]"
+                          className={`py-3.5 my-2 border-y ${
+                            isBundling ? "border-blue-900/80 bg-white/5 rounded-2xl px-3.5" : "border-[#F0DCBE] bg-[#FCF4E7]/40 rounded-2xl px-3.5"
                           }`}
                         >
-                          <div
-                            className={`text-[11px] line-through font-semibold ${
-                              isBundling ? "text-blue-200" : "text-[#042E64]/40"
-                            }`}
-                          >
-                            Rp{pkg.originalPrice.toLocaleString("id-ID")}
-                          </div>
-                          <div className="flex items-baseline gap-1 mt-0.5">
+                          <div className="flex items-center gap-2">
                             <span
-                              className={`text-2xl font-black ${
+                              className={`text-xs line-through font-semibold ${
+                                isBundling ? "text-blue-200" : "text-[#042E64]/40"
+                              }`}
+                            >
+                              Rp35.000
+                            </span>
+                            <span className="bg-[#FB6E09]/20 text-[#FB6E09] text-[10px] font-black px-1.5 py-0.5 rounded border border-[#FB6E09]/30">
+                              Promo Hemat
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1 mt-1">
+                            <span
+                              className={`text-2xl sm:text-3xl font-black ${
                                 isBundling ? "text-white" : "text-[#042E64]"
                               }`}
                             >
-                              Rp{pkg.price.toLocaleString("id-ID")}
+                              Rp30.000
+                            </span>
+                            <span
+                              className={`text-xs font-medium ${
+                                isBundling ? "text-blue-200" : "text-[#042E64]/60"
+                              }`}
+                            >
+                              / Paket
                             </span>
                           </div>
                         </div>
 
-                        {/* Features bullet list */}
-                        <ul
-                          className={`space-y-2 text-xs py-1 ${
-                            isBundling ? "text-blue-100" : "text-[#042E64]/80"
-                          }`}
-                        >
-                          {pkg.features.slice(0, 3).map((feat, idx) => (
-                            <li key={idx} className="flex items-start gap-1.5">
-                              <Check className="w-3.5 h-3.5 text-[#FB6E09] shrink-0 mt-0.5" />
-                              <span className="leading-tight">{feat}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        {/* Fasilitas / Kriteria di bawah harga (3 Poin Centang Sesuai Permintaan) */}
+                        <div className="space-y-2 pt-1">
+                          <div
+                            className={`text-[11px] font-black uppercase tracking-wider ${
+                              isBundling ? "text-blue-200" : "text-[#042E64]/60"
+                            }`}
+                          >
+                            Fasilitas Paket:
+                          </div>
+                          <ul
+                            className={`space-y-2 text-xs ${
+                              isBundling ? "text-blue-100" : "text-[#042E64]/85"
+                            }`}
+                          >
+                            {pkg.features.map((feat, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </div>
+                                <span className="font-semibold leading-tight">{feat}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
 
                       {/* Select Indicator */}

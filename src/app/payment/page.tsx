@@ -84,8 +84,8 @@ export default function PaymentPage() {
           packageKey: "bundling",
           packageName: "Paket Bundling (Berisi Paket 1, 2, dan 3)",
           packageLabel: "Paket Bundling",
-          price: 45000,
-          originalPrice: 60000,
+          price: 30000,
+          originalPrice: 35000,
           examNumbers: [1, 2, 3],
           createdAt: new Date().toISOString(),
         });
