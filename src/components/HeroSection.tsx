@@ -152,17 +152,18 @@ export default function HeroSection() {
                   Berdasarkan UU Nomor 20 Tahun 2023 tentang Aparatur Sipil Negara (ASN), pergeseran konsep manajemen talenta nasional bertujuan utama untuk:
                 </div>
 
-                {/* Multiple Choice Options */}
-                <div className="space-y-2.5 text-xs sm:text-sm">
+                {/* Multiple Choice Options (A, B, C, D, E Standar BKN) */}
+                <div className="space-y-2 text-xs sm:text-sm">
                   {[
                     { key: "A", text: "Menyeragamkan seluruh tunjangan kinerja daerah tanpa indikator capaian.", active: false },
                     { key: "B", text: "Mewujudkan sistem meritokrasi terintegrasi berbasis kualifikasi, kompetensi, dan kinerja.", active: true },
                     { key: "C", text: "Menghapuskan skema jenjang karier struktural bagi seluruh pejabat fungsional.", active: false },
                     { key: "D", text: "Membatasi mobilitas talenta ASN hanya pada instansi pembina masing-masing.", active: false },
+                    { key: "E", text: "Menerapkan sistem promosi dan kenaikan jenjang karier otomatis berdasarkan senioritas masa kerja.", active: false },
                   ].map((option) => (
                     <div
                       key={option.key}
-                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+                      className={`flex items-start gap-2.5 p-2.5 sm:p-3 rounded-xl border transition-all ${
                         option.active
                           ? "bg-[#FB6E09]/20 border-[#FB6E09] text-white font-bold"
                           : "bg-[#042E64]/60 border-[#0B3E84] text-blue-100 hover:bg-[#042E64]"
