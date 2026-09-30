@@ -11,29 +11,28 @@ import {
   CheckCircle,
   TrendingUp,
   AlertCircle,
-  BookOpen,
   Zap,
   Building2,
   Briefcase,
   ChevronRight,
   Search,
-  ArrowLeft,
   Check,
   Sparkles,
-  PlayCircle,
+  Layers,
   HeartPulse,
   Wallet,
   GraduationCap,
   Scale,
   Shield,
-  Layers,
+  ArrowRight,
+  PackageOpen,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import {
   AGENCIES_DATA,
   AgencyItem,
-  PositionItem,
-  PackageItem,
+  getPositionPackages,
+  PositionPackage,
 } from "@/data/skbCatalog";
 
 interface UserData {
@@ -54,12 +53,10 @@ export default function DashboardPage() {
     isLoggedIn: true,
   });
 
-  // Flow State for Poin 1:
-  // Step 1: Instansi -> Step 2: Jabatan -> Step 3: Paket Ujian
+  // Flow State: Step 1 (Instansi) -> Step 2 (Jabatan) -> Step 3 (4 Kotak Paket)
   const [selectedAgencyId, setSelectedAgencyId] = useState<string>("kemenkes");
   const [selectedPositionId, setSelectedPositionId] = useState<string>("kemenkes-epidemiolog");
-  const [selectedPackageType, setSelectedPackageType] = useState<"satuan" | "bundling">("bundling");
-  const [isPackageConfirmed, setIsPackageConfirmed] = useState<boolean>(true);
+  const [selectedPackageKey, setSelectedPackageKey] = useState<"paket-1" | "paket-2" | "paket-3" | "bundling">("bundling");
 
   // Search queries
   const [searchAgency, setSearchAgency] = useState<string>("");
@@ -76,15 +73,15 @@ export default function DashboardPage() {
         }
       }
 
-      // Restore saved selections if any
+      // Restore saved selections
       const savedAgency = localStorage.getItem("skb_selected_agency");
       const savedPos = localStorage.getItem("skb_selected_position");
-      const savedPkg = localStorage.getItem("skb_selected_package");
+      const savedPkg = localStorage.getItem("skb_selected_package_key") as any;
 
       if (savedAgency) setSelectedAgencyId(savedAgency);
       if (savedPos) setSelectedPositionId(savedPos);
-      if (savedPkg === "satuan" || savedPkg === "bundling") {
-        setSelectedPackageType(savedPkg);
+      if (savedPkg && ["paket-1", "paket-2", "paket-3", "bundling"].includes(savedPkg)) {
+        setSelectedPackageKey(savedPkg);
       }
     }
   }, []);
@@ -114,6 +111,11 @@ export default function DashboardPage() {
     );
   }, [currentAgency, selectedPositionId]);
 
+  // 4 Standard Packages for current position
+  const packageBoxes: PositionPackage[] = useMemo(() => {
+    return getPositionPackages(currentPosition?.title || "Jabatan SKB");
+  }, [currentPosition]);
+
   // Filtered agencies based on search
   const filteredAgencies = useMemo(() => {
     if (!searchAgency.trim()) return AGENCIES_DATA;
@@ -139,7 +141,7 @@ export default function DashboardPage() {
     );
   }, [currentAgency, searchPosition]);
 
-  // Handlers for steps
+  // Handlers for selection
   const handleSelectAgency = (agencyId: string) => {
     setSelectedAgencyId(agencyId);
     const agency = AGENCIES_DATA.find((a) => a.id === agencyId);
@@ -161,12 +163,43 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSelectPackage = (type: "satuan" | "bundling") => {
-    setSelectedPackageType(type);
-    setIsPackageConfirmed(true);
+  const handleSelectPackageBox = (key: "paket-1" | "paket-2" | "paket-3" | "bundling") => {
+    setSelectedPackageKey(key);
     if (typeof window !== "undefined") {
-      localStorage.setItem("skb_selected_package", type);
+      localStorage.setItem("skb_selected_package_key", key);
     }
+  };
+
+  // Navigasi ke Halaman Pembayaran saat tombol "Lanjutkan" diklik
+  const handleProceedToPayment = () => {
+    if (!currentPosition || !currentAgency) return;
+
+    const chosenPackage = packageBoxes.find((p) => p.packageKey === selectedPackageKey);
+    if (!chosenPackage) return;
+
+    // Simpan order preview ke localStorage
+    const pendingOrder = {
+      agencyId: currentAgency.id,
+      agencyName: currentAgency.name,
+      agencyShortName: currentAgency.shortName,
+      positionId: currentPosition.id,
+      positionTitle: currentPosition.title,
+      positionCode: currentPosition.code,
+      packageKey: chosenPackage.packageKey,
+      packageName: chosenPackage.name,
+      packageLabel: chosenPackage.label,
+      price: chosenPackage.price,
+      originalPrice: chosenPackage.originalPrice,
+      examNumbers: chosenPackage.examNumbers,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("skb_pending_order", JSON.stringify(pendingOrder));
+    }
+
+    // Arahkan ke Halaman Simulasi Pembayaran
+    router.push("/payment");
   };
 
   // Helper icon for agency
@@ -195,7 +228,16 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between h-16 sm:h-20">
             <BrandLogo size="md" />
 
+            {/* Quick Links & Profile */}
             <div className="flex items-center gap-3">
+              <Link
+                href="/my-packages"
+                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 text-xs font-black text-[#042E64] bg-white hover:bg-[#F4E3CB] border-2 border-[#F0DCBE] rounded-xl transition-all shadow-xs"
+              >
+                <PackageOpen className="w-4 h-4 text-[#FB6E09]" />
+                <span>Daftar Paket Anda</span>
+              </Link>
+
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-xs font-black text-[#042E64]">{user.name}</span>
                 <span className="text-[11px] text-[#042E64]/60 font-semibold">{user.email}</span>
@@ -216,90 +258,56 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Welcome & Package Active Banner */}
+        {/* Welcome Banner */}
         <div className="bg-[#042E64] rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-[#042E64]/20 border-3 border-[#FB6E09] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FB6E09]/20 text-[#FB6E09] border border-[#FB6E09]/40 text-xs font-black">
               <Zap className="w-3.5 h-3.5 fill-[#FB6E09]" />
-              <span>Dashboard Seleksi SKB 2026</span>
+              <span>Katalog &amp; Pembelian Paket Tryout SKB 2026</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               Selamat Datang, {user.name}!
             </h1>
             <p className="text-blue-100 text-xs sm:text-sm max-w-xl font-medium">
-              Silakan tentukan <strong>Instansi</strong> dan <strong>Jabatan Formasi</strong> yang Anda lamar untuk mengakses simulasi ujian CAT BKN spesifik dan akurat.
+              Tentukan <strong>Instansi</strong> dan <strong>Jabatan Formasi</strong>, lalu pilih paket soal yang Anda butuhkan (Paket 1, Paket 2, Paket 3, atau Paket Bundling).
             </p>
           </div>
 
-          {/* Current Selection Summary Card */}
-          <div className="bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/20 text-xs space-y-1.5 shrink-0 w-full md:w-auto">
+          {/* Quick link button to My Packages */}
+          <div className="bg-white/10 backdrop-blur-xs p-5 rounded-2xl border border-white/20 text-xs space-y-2 shrink-0 w-full md:w-auto">
             <div className="font-black text-[#FB6E09] uppercase tracking-wider text-[11px]">
-              Formasi Aktif Dipilih
+              Menu Cepat
             </div>
             <div className="text-sm font-black text-white">
-              {currentAgency.shortName} - {currentPosition?.title || "Belum dipilih"}
+              Sudah Pernah Membeli Paket?
             </div>
-            <div className="flex items-center gap-2 text-blue-200 text-[11px] font-semibold">
-              <CheckCircle className="w-3.5 h-3.5 text-[#FB6E09]" />
-              <span>
-                Paket: {selectedPackageType === "bundling" ? "Bundling SKB (3 Ujian)" : "Satuan (1 Ujian)"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-5 rounded-3xl border-2 border-[#F0DCBE] shadow-2xs space-y-1">
-            <div className="text-xs text-[#042E64]/65 font-bold">Total Instansi</div>
-            <div className="text-2xl sm:text-3xl font-black text-[#042E64]">{AGENCIES_DATA.length} Kementerian/Lembaga</div>
-            <div className="text-[11px] text-[#FB6E09] font-black flex items-center gap-1">
-              <Building2 className="w-3.5 h-3.5" /> Database Terupdate BKN
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border-2 border-[#F0DCBE] shadow-2xs space-y-1">
-            <div className="text-xs text-[#042E64]/65 font-bold">Durasi Ujian Resmi</div>
-            <div className="text-2xl sm:text-3xl font-black text-[#042E64]">100 Menit</div>
-            <div className="text-[11px] text-[#FB6E09] font-black flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> 110 Butir Soal CAT BKN
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border-2 border-[#F0DCBE] shadow-2xs space-y-1">
-            <div className="text-xs text-[#042E64]/65 font-bold">Ambang Batas (Passing Grade)</div>
-            <div className="text-2xl sm:text-3xl font-black text-[#042E64]">
-              {currentPosition ? currentPosition.passingScore : 350}
-            </div>
-            <div className="text-[11px] text-[#042E64]/50 font-semibold">Standar Kelulusan Formasi</div>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border-2 border-[#F0DCBE] shadow-2xs space-y-1">
-            <div className="text-xs text-[#042E64]/65 font-bold">Peringkat Nasional</div>
-            <div className="text-2xl sm:text-3xl font-black text-[#042E64]">-</div>
-            <div className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5" /> Real-Time per Jabatan
-            </div>
+            <Link
+              href="/my-packages"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FB6E09] hover:bg-[#E45E00] text-white text-xs font-black transition-all shadow-md"
+            >
+              <PackageOpen className="w-4 h-4" />
+              <span>Buka Daftar Paket Anda →</span>
+            </Link>
           </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* FITUR POIN 1: ALUR PEMILIHAN INSTANSI -> JABATAN -> PAKET (SATUAN/BUNDLING) */}
+        {/* STEPPER ALUR: 1. PILIH INSTANSI -> 2. PILIH JABATAN -> 3. PILIH PAKET    */}
         {/* ========================================================================= */}
         <div className="space-y-8">
-          {/* Section Title & Progress Stepper */}
+          {/* Progress Header */}
           <div className="bg-white p-6 sm:p-7 rounded-3xl border-2 border-[#F0DCBE] shadow-xs space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FB6E09]/10 text-[#FB6E09] text-xs font-black uppercase tracking-wider mb-2">
                   <Layers className="w-3.5 h-3.5 fill-[#FB6E09]" />
-                  Alur Pemilihan Tryout SKB
+                  Alur Pemilihan Paket Tryout
                 </span>
                 <h2 className="text-xl sm:text-2xl font-black text-[#042E64]">
-                  Pilih Instansi, Jabatan, &amp; Paket Soal Anda
+                  Pilih Instansi, Jabatan, &amp; 4 Pilihan Paket Ujian
                 </h2>
                 <p className="text-xs sm:text-sm text-[#042E64]/70 font-medium mt-1">
-                  Ikuti langkah terstruktur di bawah ini untuk memilih paket yang sesuai dengan formasi lamaran ASN Anda.
+                  Pilih salah satu dari 4 kotak paket (Paket 1, Paket 2, Paket 3, atau Paket Bundling), kemudian klik tombol &quot;Lanjutkan&quot; untuk simulasi pembayaran.
                 </p>
               </div>
 
@@ -314,7 +322,7 @@ export default function DashboardPage() {
                 </span>
                 <ChevronRight className="w-4 h-4 text-[#FB6E09]" />
                 <span className="px-3 py-1.5 rounded-xl bg-[#FB6E09] text-white">
-                  3. Paket Soal
+                  3. 4 Opsi Paket
                 </span>
               </div>
             </div>
@@ -413,7 +421,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <span>{agency.positions.length} Formasi Jabatan</span>
-                      <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      <span className="flex items-center gap-1">
                         Pilih Formasi <ChevronRight className="w-3.5 h-3.5" />
                       </span>
                     </div>
@@ -436,7 +444,7 @@ export default function DashboardPage() {
                   Pilih Jabatan Formasi ({currentAgency.shortName})
                 </h3>
                 <p className="text-xs text-[#042E64]/70 font-medium">
-                  Pilih jabatan yang Anda lamar di {currentAgency.name} untuk melihat paket soal spesifik.
+                  Pilih jabatan yang Anda lamar di {currentAgency.name} untuk menampilkan 4 kotak paket soal.
                 </p>
               </div>
 
@@ -484,7 +492,7 @@ export default function DashboardPage() {
                             isSelected ? "text-amber-300" : "text-[#FB6E09]"
                           }`}
                         >
-                          <Award className="w-3.5 h-3.5" /> Passing: {pos.passingScore}
+                          <Award className="w-3.5 h-3.5" /> Passing Grade: {pos.passingScore}
                         </span>
                       </div>
 
@@ -504,7 +512,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#FB6E09]" /> {pos.durationMinutes} Menit ({pos.totalQuestions} Soal)
+                        <Clock className="w-3.5 h-3.5 text-[#FB6E09]" /> 100 Menit (110 Soal)
                       </span>
                       <span
                         className={`font-black flex items-center gap-1 ${
@@ -521,319 +529,180 @@ export default function DashboardPage() {
           </div>
 
           {/* --------------------------------------------------------------------- */}
-          {/* LANGKAH 3: TAMPILKAN PILIHAN PAKET (SATUAN / BUNDLING) DI JABATAN     */}
+          {/* LANGKAH 3: 4 KOTAK SEJAJAR / BERURUTAN & TOMBOL "LANJUTKAN"           */}
           {/* --------------------------------------------------------------------- */}
           {currentPosition && (
-            <div className="space-y-4 pt-4 border-t-2 border-[#F0DCBE]">
+            <div className="space-y-6 pt-4 border-t-2 border-[#F0DCBE]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-[#042E64] flex items-center gap-2">
                     <span className="w-7 h-7 rounded-xl bg-[#FB6E09] text-white flex items-center justify-center text-xs font-black">
                       3
                     </span>
-                    Pilihan Paket Ujian untuk {currentPosition.title}
+                    Pilih Paket Soal untuk {currentPosition.title}
                   </h3>
                   <p className="text-xs text-[#042E64]/70 font-medium">
-                    Tersedia 2 pilihan paket (Satuan dan Bundling) khusus untuk materi ujian jabatan ini.
+                    Silakan pilih salah satu dari 4 opsi paket berikut untuk instansi {currentAgency.name}.
                   </p>
                 </div>
 
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-[#F0DCBE] text-xs font-bold text-[#042E64]">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border-2 border-[#F0DCBE] text-xs font-bold text-[#042E64] shrink-0">
                   <Briefcase className="w-4 h-4 text-[#FB6E09]" />
                   <span>{currentAgency.shortName}</span>
                   <span>•</span>
-                  <span className="text-[#FB6E09]">{currentPosition.code}</span>
+                  <span className="text-[#FB6E09] font-black">{currentPosition.code}</span>
                 </div>
               </div>
 
-              {/* Grid 2 Pilihan Paket: Satuan vs Bundling */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-stretch pt-2">
-                {/* PAKET 1: SATUAN */}
-                <div
-                  className={`bg-white rounded-3xl p-6 sm:p-7 border-3 flex flex-col justify-between transition-all ${
-                    selectedPackageType === "satuan"
-                      ? "border-[#FB6E09] ring-2 ring-[#FB6E09]/30 shadow-lg"
-                      : "border-[#F0DCBE] hover:border-[#FB6E09]/50 shadow-xs"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black text-[#042E64]/60 uppercase tracking-wider">
-                        Latihan Mandiri
-                      </span>
-                      {selectedPackageType === "satuan" && (
-                        <span className="text-xs font-black text-[#FB6E09] bg-[#FB6E09]/10 px-2.5 py-0.5 rounded-full border border-[#FB6E09]/30">
-                          ✓ Paket Terpilih
-                        </span>
-                      )}
-                    </div>
+              {/* 4 KOTAK SEJAJAR / BERURUTAN (GRID 4 KOLOM) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+                {packageBoxes.map((pkg) => {
+                  const isSelected = selectedPackageKey === pkg.packageKey;
+                  const isBundling = pkg.packageKey === "bundling";
 
-                    <h4 className="text-xl font-black text-[#042E64]">
-                      {currentPosition.packages.satuan.name}
-                    </h4>
-                    <p className="text-xs text-[#042E64]/70 mt-1 mb-4 font-medium">
-                      {currentPosition.packages.satuan.description}
-                    </p>
-
-                    {/* Price Box */}
-                    <div className="py-4 border-y border-[#F0DCBE] my-4">
-                      <div className="text-xs text-[#042E64]/40 line-through font-semibold">
-                        Rp{currentPosition.packages.satuan.originalPrice.toLocaleString("id-ID")}
-                      </div>
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className="text-3xl font-black text-[#042E64]">
-                          Rp{currentPosition.packages.satuan.price.toLocaleString("id-ID")}
-                        </span>
-                        <span className="text-xs text-[#042E64]/70 font-semibold">
-                          / 1 Sesi Ujian (110 Soal)
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Features List */}
-                    <ul className="space-y-3 text-xs sm:text-sm text-[#042E64]/85 py-2">
-                      {currentPosition.packages.satuan.features.map((feat, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5">
-                          <Check className="w-4 h-4 text-[#FB6E09] shrink-0 mt-0.5" />
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="mt-6 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPackage("satuan")}
-                      className={`w-full py-3.5 px-4 rounded-xl font-black text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                        selectedPackageType === "satuan"
-                          ? "bg-[#042E64] text-white hover:bg-[#0B3E84]"
-                          : "bg-[#FCF4E7] text-[#042E64] hover:bg-[#F4E3CB] border-2 border-[#F0DCBE]"
+                  return (
+                    <div
+                      key={pkg.id}
+                      onClick={() => handleSelectPackageBox(pkg.packageKey)}
+                      className={`rounded-3xl p-5 sm:p-6 border-3 transition-all cursor-pointer flex flex-col justify-between relative ${
+                        isSelected
+                          ? isBundling
+                            ? "bg-[#042E64] text-white border-[#FB6E09] ring-4 ring-[#FB6E09]/40 shadow-xl shadow-[#042E64]/20 scale-[1.02]"
+                            : "bg-white text-[#042E64] border-[#FB6E09] ring-4 ring-[#FB6E09]/30 shadow-lg scale-[1.02]"
+                          : isBundling
+                          ? "bg-[#042E64]/90 text-white border-[#0B3E84] hover:border-[#FB6E09]/80 shadow-md"
+                          : "bg-white text-[#042E64] border-[#F0DCBE] hover:border-[#FB6E09]/50 shadow-xs"
                       }`}
                     >
-                      {selectedPackageType === "satuan" ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Paket Satuan Terpilih</span>
-                        </>
-                      ) : (
-                        <span>Pilih Paket Satuan (Rp20.000)</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                      {/* Top Selection or Discount Badge */}
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        {isBundling ? (
+                          <span className="bg-[#FB6E09] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                            <Sparkles className="w-3 h-3 fill-white" /> Diskon 25%
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                              isSelected
+                                ? "bg-[#FB6E09]/15 text-[#FB6E09]"
+                                : "bg-[#FCF4E7] text-[#042E64]/70"
+                            }`}
+                          >
+                            Satuan
+                          </span>
+                        )}
 
-                {/* PAKET 2: BUNDLING (HIGHLIGHTED) */}
-                <div
-                  className={`relative bg-[#042E64] text-white rounded-3xl p-6 sm:p-7 border-3 flex flex-col justify-between shadow-xl transition-all ${
-                    selectedPackageType === "bundling"
-                      ? "border-[#FB6E09] ring-4 ring-[#FB6E09]/30 shadow-[#FB6E09]/20"
-                      : "border-[#0B3E84] hover:border-[#FB6E09]/80"
-                  }`}
-                >
-                  {/* Top Badge */}
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#FB6E09] text-white text-[11px] font-black px-4 py-1 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 whitespace-nowrap">
-                    <Sparkles className="w-3.5 h-3.5 fill-white" />
-                    <span>Paling Populer • Hemat 25%</span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2 mt-2">
-                      <span className="text-xs font-black text-[#FB6E09] uppercase tracking-wider">
-                        Persiapan Komprehensif
-                      </span>
-                      {selectedPackageType === "bundling" && (
-                        <span className="text-xs font-black text-amber-300 bg-white/10 px-2.5 py-0.5 rounded-full border border-amber-300/40">
-                          ✓ Paket Terpilih
-                        </span>
-                      )}
-                    </div>
-
-                    <h4 className="text-xl font-black text-white">
-                      {currentPosition.packages.bundling.name}
-                    </h4>
-                    <p className="text-xs text-blue-200 mt-1 mb-4 font-medium">
-                      {currentPosition.packages.bundling.description}
-                    </p>
-
-                    {/* Price Box */}
-                    <div className="py-4 border-y border-[#0B3E84] bg-white/5 rounded-2xl px-4 my-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-300 line-through font-semibold">
-                          Rp{currentPosition.packages.bundling.originalPrice.toLocaleString("id-ID")}
-                        </span>
-                        <span className="bg-[#FB6E09]/30 text-[#FB6E09] text-[10px] font-black px-2 py-0.5 rounded-md border border-[#FB6E09]/40">
-                          Hemat Rp15.000
-                        </span>
+                        {isSelected && (
+                          <span className="w-6 h-6 rounded-full bg-[#FB6E09] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-xs">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-baseline gap-1 mt-1">
-                        <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                          Rp{currentPosition.packages.bundling.price.toLocaleString("id-ID")}
-                        </span>
-                        <span className="text-xs text-blue-200 font-semibold">
-                          / 3 Paket Ujian Lengkap
-                        </span>
-                      </div>
-                    </div>
 
-                    {/* Features List */}
-                    <ul className="space-y-3 text-xs sm:text-sm text-slate-100 py-2">
-                      {currentPosition.packages.bundling.features.map((feat, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5">
-                          <div className="w-4 h-4 rounded-full bg-[#FB6E09] text-white flex items-center justify-center shrink-0 mt-0.5">
-                            <Check className="w-3 h-3 stroke-[3]" />
+                      {/* Header Box */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-black uppercase tracking-wider text-[#FB6E09]">
+                          {pkg.label}
+                        </div>
+                        <h4
+                          className={`text-base font-black leading-snug ${
+                            isBundling ? "text-white" : "text-[#042E64]"
+                          }`}
+                        >
+                          {pkg.name}
+                        </h4>
+                        <p
+                          className={`text-xs leading-relaxed font-medium ${
+                            isBundling ? "text-blue-100" : "text-[#042E64]/70"
+                          }`}
+                        >
+                          {pkg.description}
+                        </p>
+
+                        {/* Price */}
+                        <div
+                          className={`py-3 my-2 border-y ${
+                            isBundling ? "border-blue-900/80" : "border-[#F0DCBE]"
+                          }`}
+                        >
+                          <div
+                            className={`text-[11px] line-through font-semibold ${
+                              isBundling ? "text-blue-200" : "text-[#042E64]/40"
+                            }`}
+                          >
+                            Rp{pkg.originalPrice.toLocaleString("id-ID")}
                           </div>
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                          <div className="flex items-baseline gap-1 mt-0.5">
+                            <span
+                              className={`text-2xl font-black ${
+                                isBundling ? "text-white" : "text-[#042E64]"
+                              }`}
+                            >
+                              Rp{pkg.price.toLocaleString("id-ID")}
+                            </span>
+                          </div>
+                        </div>
 
-                  <div className="mt-6 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPackage("bundling")}
-                      className={`w-full py-4 px-4 rounded-xl font-black text-sm sm:text-base transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg ${
-                        selectedPackageType === "bundling"
-                          ? "bg-[#FB6E09] hover:bg-[#E45E00] text-white shadow-[#FB6E09]/30"
-                          : "bg-white/10 hover:bg-white/20 text-white border border-white/20"
-                      }`}
-                    >
-                      {selectedPackageType === "bundling" ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Paket Bundling Terpilih (Rekomendasi)</span>
-                        </>
-                      ) : (
-                        <span>Pilih Paket Bundling (Hemat 25%)</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                        {/* Features bullet list */}
+                        <ul
+                          className={`space-y-2 text-xs py-1 ${
+                            isBundling ? "text-blue-100" : "text-[#042E64]/80"
+                          }`}
+                        >
+                          {pkg.features.slice(0, 3).map((feat, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <Check className="w-3.5 h-3.5 text-[#FB6E09] shrink-0 mt-0.5" />
+                              <span className="leading-tight">{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Select Indicator */}
+                      <div className="mt-5 pt-3">
+                        <div
+                          className={`w-full py-2.5 px-3 rounded-xl font-black text-xs text-center transition-colors ${
+                            isSelected
+                              ? "bg-[#FB6E09] text-white shadow-md shadow-[#FB6E09]/30"
+                              : isBundling
+                              ? "bg-white/10 text-white hover:bg-white/20"
+                              : "bg-[#FCF4E7] text-[#042E64] hover:bg-[#F4E3CB]"
+                          }`}
+                        >
+                          {isSelected ? "✓ Paket Dipilih" : "Klik untuk Memilih"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Status & Sesi Ujian Siap Dikerjakan Berdasarkan Paket Terpilih */}
-              <div className="mt-8 bg-white rounded-3xl p-6 sm:p-7 border-2 border-[#F0DCBE] shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F0DCBE]">
-                  <div>
-                    <span className="text-[11px] font-black uppercase text-[#FB6E09] tracking-wider">
-                      Status Akses Paket Anda
-                    </span>
-                    <h4 className="text-lg font-black text-[#042E64] mt-0.5">
-                      Sesi Tryout CAT BKN: {currentPosition.title}
-                    </h4>
+              {/* DI BAWAH KEEMPAT KOTAK: SATU TOMBOL "LANJUTKAN" */}
+              <div className="bg-white rounded-3xl p-6 sm:p-7 border-2 border-[#F0DCBE] shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="text-xs text-[#042E64]/60 font-bold uppercase tracking-wider">
+                    Ringkasan Pilihan Anda
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      ● Status: Siap Dikerjakan
+                  <div className="text-base sm:text-lg font-black text-[#042E64]">
+                    {packageBoxes.find((p) => p.packageKey === selectedPackageKey)?.name}
+                  </div>
+                  <div className="text-xs text-[#042E64]/75 font-medium">
+                    Formasi: <strong>{currentPosition.title}</strong> ({currentAgency.shortName}) • Total Tagihan:{" "}
+                    <span className="text-[#FB6E09] font-black text-sm">
+                      Rp{packageBoxes.find((p) => p.packageKey === selectedPackageKey)?.price.toLocaleString("id-ID")}
                     </span>
                   </div>
                 </div>
 
-                {/* Sesi Ujian List */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                  {selectedPackageType === "bundling" ? (
-                    <>
-                      <div className="p-4 rounded-2xl bg-[#FCF4E7]/60 border border-[#F0DCBE] space-y-2">
-                        <span className="text-[10px] font-black text-[#FB6E09] bg-[#FB6E09]/10 px-2 py-0.5 rounded">
-                          Paket 1
-                        </span>
-                        <div className="text-sm font-black text-[#042E64]">
-                          SKB Teknis Formasi {currentPosition.title}
-                        </div>
-                        <div className="text-xs text-[#042E64]/70">
-                          110 Soal • 100 Menit • Standar BKN
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            alert(
-                              `[SIKILAT CAT Engine]\n\nMemulai Ujian: Paket 1 - SKB Teknis ${currentPosition.title}\nInstansi: ${currentAgency.name}\nJumlah: 110 Soal\nWaktu: 100 Menit.\n\n(Struktur Dashboard Poin 1 Berhasil Dirombak!)`
-                            );
-                          }}
-                          className="w-full mt-2 py-2.5 px-3 rounded-xl bg-[#FB6E09] hover:bg-[#E45E00] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                        >
-                          <PlayCircle className="w-3.5 h-3.5" />
-                          <span>Mulai Ujian Sesi 1</span>
-                        </button>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-[#FCF4E7]/60 border border-[#F0DCBE] space-y-2">
-                        <span className="text-[10px] font-black text-[#FB6E09] bg-[#FB6E09]/10 px-2 py-0.5 rounded">
-                          Paket 2
-                        </span>
-                        <div className="text-sm font-black text-[#042E64]">
-                          SKB Manajerial, Sosio-Kultural &amp; Wawancara
-                        </div>
-                        <div className="text-xs text-[#042E64]/70">
-                          110 Soal • 100 Menit • Standar BKN
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            alert(
-                              `[SIKILAT CAT Engine]\n\nMemulai Ujian: Paket 2 - SKB Manajerial & Sosio-Kultural\nInstansi: ${currentAgency.name}\nJumlah: 110 Soal\nWaktu: 100 Menit.`
-                            );
-                          }}
-                          className="w-full mt-2 py-2.5 px-3 rounded-xl bg-[#FB6E09] hover:bg-[#E45E00] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                        >
-                          <PlayCircle className="w-3.5 h-3.5" />
-                          <span>Mulai Ujian Sesi 2</span>
-                        </button>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-[#FCF4E7]/60 border border-[#F0DCBE] space-y-2">
-                        <span className="text-[10px] font-black text-[#FB6E09] bg-[#FB6E09]/10 px-2 py-0.5 rounded">
-                          Paket 3
-                        </span>
-                        <div className="text-sm font-black text-[#042E64]">
-                          Simulasi Terpadu CAT BKN Terstandar
-                        </div>
-                        <div className="text-xs text-[#042E64]/70">
-                          110 Soal • 100 Menit • Prediksi Lengkap
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            alert(
-                              `[SIKILAT CAT Engine]\n\nMemulai Ujian: Paket 3 - Simulasi Terpadu CAT BKN Lengkap\nInstansi: ${currentAgency.name}\nJumlah: 110 Soal\nWaktu: 100 Menit.`
-                            );
-                          }}
-                          className="w-full mt-2 py-2.5 px-3 rounded-xl bg-[#FB6E09] hover:bg-[#E45E00] text-white text-xs font-black flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                        >
-                          <PlayCircle className="w-3.5 h-3.5" />
-                          <span>Mulai Ujian Sesi 3</span>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="col-span-1 md:col-span-3 p-5 rounded-2xl bg-[#FCF4E7]/60 border border-[#F0DCBE] flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div>
-                        <span className="text-[10px] font-black text-[#FB6E09] bg-[#FB6E09]/10 px-2.5 py-0.5 rounded">
-                          Paket Satuan Terpilih
-                        </span>
-                        <div className="text-base font-black text-[#042E64] mt-1">
-                          Simulasi CAT BKN Pokok: {currentPosition.title}
-                        </div>
-                        <div className="text-xs text-[#042E64]/70 font-medium">
-                          110 Soal Materi Uji Teknis Formasi • Timer 100 Menit • Pembahasan & Skor Real-Time
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          alert(
-                            `[SIKILAT CAT Engine]\n\nMemulai Ujian: Paket Satuan - ${currentPosition.title}\nInstansi: ${currentAgency.name}\nJumlah: 110 Soal\nWaktu: 100 Menit.`
-                          );
-                        }}
-                        className="py-3 px-6 rounded-xl bg-[#FB6E09] hover:bg-[#E45E00] text-white text-sm font-black flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md shrink-0"
-                      >
-                        <PlayCircle className="w-4 h-4" />
-                        <span>Mulai Ujian CAT Sekarang</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                {/* Tombol Lanjutkan */}
+                <button
+                  type="button"
+                  onClick={handleProceedToPayment}
+                  className="w-full sm:w-auto px-8 py-4 rounded-xl font-black text-sm sm:text-base text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] transition-all shadow-lg shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer shrink-0 hover:scale-[1.02]"
+                >
+                  <span>Lanjutkan ke Pembayaran</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
           )}
@@ -845,9 +714,9 @@ export default function DashboardPage() {
             <AlertCircle className="w-5 h-5 text-[#FB6E09]" />
           </div>
           <div className="space-y-1">
-            <strong className="font-black text-[#042E64] text-sm">Tips Navigasi Dashboard SIKILAT:</strong>
+            <strong className="font-black text-[#042E64] text-sm">Tips Pemilihan Paket SIKILAT:</strong>
             <p className="text-[#042E64]/80 leading-relaxed font-medium">
-              Anda dapat mengganti pilihan Instansi maupun Jabatan kapan saja dengan mengklik kartu instansi/jabatan di atas. Setiap jabatan memiliki bank soal tersendiri yang disesuaikan dengan kisi-kisi resmi Permenpan-RB 2026.
+              Pilih <strong>Paket Bundling</strong> jika Anda ingin menguasai seluruh materi (Paket 1, Paket 2, dan Paket 3) secara komprehensif dengan harga promo hemat 25%. Setelah menekan tombol <strong>&quot;Lanjutkan&quot;</strong>, Anda akan diarahkan ke halaman simulasi struk pembayaran resmi.
             </p>
           </div>
         </div>

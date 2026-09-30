@@ -1,11 +1,12 @@
-export interface PackageItem {
+export interface PositionPackage {
   id: string;
-  type: "satuan" | "bundling";
+  packageKey: "paket-1" | "paket-2" | "paket-3" | "bundling";
+  label: string;
   name: string;
   badge?: string;
   price: number;
   originalPrice: number;
-  examCount: number;
+  examNumbers: number[];
   description: string;
   features: string[];
   isPopular?: boolean;
@@ -20,10 +21,6 @@ export interface PositionItem {
   totalQuestions: number;
   durationMinutes: number;
   description: string;
-  packages: {
-    satuan: PackageItem;
-    bundling: PackageItem;
-  };
 }
 
 export interface AgencyItem {
@@ -36,6 +33,79 @@ export interface AgencyItem {
   description: string;
   popularPositionsCount: number;
   positions: PositionItem[];
+}
+
+// Helper to generate the 4 standard package boxes for any position
+export function getPositionPackages(positionTitle: string): PositionPackage[] {
+  return [
+    {
+      id: "paket-1",
+      packageKey: "paket-1",
+      label: "Paket 1",
+      name: `Paket 1: SKB Teknis Formasi`,
+      price: 20000,
+      originalPrice: 30000,
+      examNumbers: [1],
+      description: `Materi Uji Pokok Teknis Jabatan ${positionTitle} sesuai kisi-kisi resmi Kemenpan-RB.`,
+      features: [
+        "110 Butir Soal CAT BKN Teknis",
+        "Waktu Ujian 100 Menit",
+        "Kunci Jawaban & Pembahasan Detail",
+        "Masa Aktif 30 Hari",
+      ],
+    },
+    {
+      id: "paket-2",
+      packageKey: "paket-2",
+      label: "Paket 2",
+      name: `Paket 2: SKB Manajerial & Wawancara`,
+      price: 20000,
+      originalPrice: 30000,
+      examNumbers: [2],
+      description: `Studi Kasus Manajerial, Sosio-Kultural, dan Wawancara Integritas ASN.`,
+      features: [
+        "110 Butir Soal Manajerial & Wawancara",
+        "Waktu Ujian 100 Menit",
+        "Rasionalisasi Skoring BKN",
+        "Masa Aktif 30 Hari",
+      ],
+    },
+    {
+      id: "paket-3",
+      packageKey: "paket-3",
+      label: "Paket 3",
+      name: `Paket 3: Simulasi Terpadu CAT BKN`,
+      price: 20000,
+      originalPrice: 30000,
+      examNumbers: [3],
+      description: `Simulasi Terpadu CAT BKN Lengkap dengan bobot komposit penentu kelulusan formasi.`,
+      features: [
+        "110 Butir Soal Prediksi Terpadu",
+        "Waktu Ujian 100 Menit",
+        "Analisis Grafik Kelemahan Materi",
+        "Masa Aktif 30 Hari",
+      ],
+    },
+    {
+      id: "bundling",
+      packageKey: "bundling",
+      label: "Paket Bundling",
+      name: `Paket Bundling (Berisi Paket 1, 2, dan 3)`,
+      badge: "Paling Hemat • Diskon 25%",
+      price: 45000,
+      originalPrice: 60000,
+      examNumbers: [1, 2, 3],
+      isPopular: true,
+      description: `Akses lengkap seluruh 3 paket ujian (Paket 1, Paket 2, dan Paket 3) secara terpadu.`,
+      features: [
+        "Semua isi Paket 1 (Teknis Formasi)",
+        "Semua isi Paket 2 (Manajerial & Wawancara)",
+        "Semua isi Paket 3 (Simulasi Terpadu BKN)",
+        "Ranking Nasional Real-Time",
+        "Masa Aktif Selamanya & Bisa Diulang",
+      ],
+    },
+  ];
 }
 
 export const AGENCIES_DATA: AgencyItem[] = [
@@ -58,43 +128,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Surveilans penyakit menular & tidak menular, investigasi wabah/KLB, dan manajemen data kesehatan masyarakat.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkes-epidemiolog-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Epidemiolog Kesehatan",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Materi Pokok Jabatan Epidemiolog Kesehatan.",
-            features: [
-              "1x Sesi Ujian Berstandar CAT BKN (110 Soal / 100 Menit)",
-              "Kunci Jawaban & Pembahasan Lengkap",
-              "Skor CAT Real-Time & Riwayat Nilai",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkes-epidemiolog-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Epidemiolog Kesehatan",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu: Kompetensi Teknis Epidemiologi, Sosio-Kultural/Manajerial, dan Simulasi Prediksi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Kemampuan Teknis Jabatan Epidemiolog",
-              "Paket 2: Manajerial, Sosio-Kultural & Wawancara",
-              "Paket 3: Simulasi Terpadu Prediksi BKN Resmi",
-              "Pembahasan Lengkap & Trik Pengerjaan Kilat 30 Detik",
-              "Ranking Nasional Real-Time Peserta Formasi Kemenkes",
-              "Masa Aktif Selamanya & Bisa Diulang Kapan Saja",
-            ],
-          },
-        },
       },
       {
         id: "kemenkes-pranata-lab",
@@ -105,42 +138,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Pengujian spesimen klinis, validasi instrumen laboratorium medik, biosafety, dan penjaminan mutu analitik.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkes-pranata-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pranata Laboratorium Kesehatan",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Materi Uji Teknis Laboratorium Medis.",
-            features: [
-              "1x Sesi Ujian Berstandar CAT BKN (110 Soal)",
-              "Kunci Jawaban & Rasionalisasi Pembahasan",
-              "Skor Instan CAT BKN",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkes-pranata-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pranata Laboratorium Kesehatan",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Laboratorium Medis, Manajerial Kesehatan, & Simulasi Terpadu.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Analisis Spesimen Klinis & Penjaminan Mutu Lab",
-              "Paket 2: Manajerial, Sosio-Kultural & Etika Profesi",
-              "Paket 3: Simulasi CAT Terpadu Full Timer",
-              "Ranking Nasional Real-Time Formasi Pranata Lab",
-              "Masa Aktif Selamanya & Akses Pembahasan Offline",
-            ],
-          },
-        },
       },
       {
         id: "kemenkes-nutrisionis",
@@ -151,41 +148,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Asuhan gizi klinik, manajemen penyelenggaraan makanan RS, serta program intervensi gizi masyarakat (Stunting).",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkes-nutrisionis-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Nutrisionis",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Materi Gizi Klinis & Kesehatan Masyarakat.",
-            features: [
-              "1x Sesi Ujian Berstandar CAT BKN (110 Soal)",
-              "Kunci Jawaban & Pembahasan",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkes-nutrisionis-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Nutrisionis",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Asuhan Gizi, Kebijakan Stunting Nasional, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Gizi Klinis & Dietetik Rumah Sakit",
-              "Paket 2: Manajerial & Program Gizi Nasional",
-              "Paket 3: Simulasi Komprehensif CAT BKN",
-              "Ranking Nasional Real-Time & Pembahasan Lengkap",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kemenkes-administrator-kes",
@@ -196,41 +158,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Penyusunan kebijakan program kesehatan, akreditasi fasyankes, perizinan nakes, dan audit operasional kesehatan.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkes-adminkes-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Administrator Kesehatan",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Regulasi & Administrasi Kebijakan Kesehatan.",
-            features: [
-              "1x Sesi Ujian CAT BKN (110 Soal / 100 Menit)",
-              "Kunci Jawaban & Pembahasan Regulasi Terupdate",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkes-adminkes-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Administrator Kesehatan",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Kebijakan Kesehatan, Akreditasi Fasyankes, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Regulasi UU Kesehatan & Akreditasi Fasyankes",
-              "Paket 2: Manajemen Program & Tata Kelola Nakes",
-              "Paket 3: Simulasi Terpadu CAT BKN Lengkap",
-              "Ranking Nasional Real-Time & Trik Waktu Ujian",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
     ],
   },
@@ -253,41 +180,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Formulasi, implementasi, dan evaluasi kebijakan fiskal serta penganggaran belanja negara.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkeu-kebijakan-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Analis Kebijakan",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Formulasi Kebijakan Publik & Fiskal.",
-            features: [
-              "1x Sesi CAT BKN Teknis Analis Kebijakan (110 Soal)",
-              "Kunci Jawaban & Pembahasan Logis",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkeu-kebijakan-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Analis Kebijakan",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu: Analisis Kebijakan, Sosio-Kultural ASN, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Metodologi Riset & Kebijakan Fiskal Publik",
-              "Paket 2: Studi Kasus Manajerial & Wawancara ASN",
-              "Paket 3: Simulasi Terpadu CAT BKN Lengkap",
-              "Ranking Nasional Real-Time Formasi Kemenkeu",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kemenkeu-pemeriksa-pajak",
@@ -298,41 +190,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Pemeriksaan kepatuhan perpajakan Wajib Pajak, regulasi UU HPP, PPh, PPN, dan KUP.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkeu-pajak-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pemeriksa Pajak",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi CAT BKN Materi Hukum Pajak & Audit Pembukuan.",
-            features: [
-              "1x Sesi Ujian CAT BKN Pemeriksa Pajak (110 Soal)",
-              "Pembahasan Pasal UU Perpajakan Terupdate",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkeu-pajak-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pemeriksa Pajak",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu: Perpajakan Material, Formal, & Simulasi Komprehensif.",
-            features: [
-              "3x Sesi Ujian Lengkap CAT BKN",
-              "Paket 1: UU HPP, KUP, PPh Badan & Orang Pribadi",
-              "Paket 2: PPN/PPnBM, Akuntansi Pajak & Audit Kasus",
-              "Paket 3: Simulasi Terpadu Prediksi Kelulusan CAT BKN",
-              "Ranking Nasional Real-Time & Trik Hitung Cepat",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kemenkeu-analis-anggaran",
@@ -343,41 +200,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Penganggaran belanja K/L, penyusunan APBN, manajemen utang negara, dan evaluasi output belanja.",
-        packages: {
-          satuan: {
-            id: "pkg-kemenkeu-anggaran-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Analis Anggaran",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi CAT BKN Penganggaran APBN & Keuangan Negara.",
-            features: [
-              "1x Sesi Ujian CAT BKN (110 Soal)",
-              "Kunci Jawaban & Pembahasan Akuntansi Pemerintah",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemenkeu-anggaran-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Analis Anggaran",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Siklus APBN, Manajemen Kas Negara, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Siklus Penganggaran APBN & Standar Biaya",
-              "Paket 2: Analisis Kinerja Anggaran & Manajerial",
-              "Paket 3: Simulasi Penuh CAT BKN Waktu Nyata",
-              "Ranking Nasional Terpadu Peserta Kemenkeu",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
     ],
   },
@@ -400,41 +222,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Hukum Pidana Materiil & Formil (KUHP/KUHAP), Tindak Pidana Khusus (Tipikor/TPPU), Perdata & Tata Usaha Negara.",
-        packages: {
-          satuan: {
-            id: "pkg-kejaksaan-jaksa-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Ahli Pertama Jaksa",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Hukum Acara Pidana & Substansi Kejaksaan.",
-            features: [
-              "1x Sesi CAT BKN Ahli Pertama Jaksa (110 Soal)",
-              "Kunci Jawaban & Dasar Pasal Hukum Terkait",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kejaksaan-jaksa-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Ahli Pertama Jaksa",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Hukum Pidana, Pidsus/Tipikor, Datun, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Hukum Pidana Umum, KUHAP & Pembuktian",
-              "Paket 2: Tipikor, TPPU, Datun & UU Kejaksaan Terkini",
-              "Paket 3: Simulasi Terpadu CAT BKN Lengkap",
-              "Ranking Nasional Real-Time Peserta Calon Jaksa",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kejaksaan-pranata-peradilan",
@@ -445,41 +232,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Pengelolaan berkas perkara pidana/perdata, administrasi persidangan, dan sistem informasi perkara.",
-        packages: {
-          satuan: {
-            id: "pkg-kejaksaan-pranata-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pranata Peradilan",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Administrasi Perkara & Tata Laksana Sidang.",
-            features: [
-              "1x Sesi CAT BKN Pranata Peradilan (110 Soal)",
-              "Kunci Jawaban & Pembahasan",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kejaksaan-pranata-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pranata Peradilan",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Administrasi Perkara, UU Peradilan, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian CAT BKN Terpadu",
-              "Paket 1: Alur Administrasi Perkara & Registrasi Sidang",
-              "Paket 2: Manajemen Arsip Hukum & Etika Petugas",
-              "Paket 3: Simulasi CAT Terpadu Full Timer",
-              "Ranking Nasional Peserta Kejaksaan RI",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kejaksaan-petugas-barang-bukti",
@@ -490,41 +242,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Inventarisasi, penyimpanan, pemeliharaan, serta proses lelang/pemusnahan barang rampasan negara.",
-        packages: {
-          satuan: {
-            id: "pkg-kejaksaan-bb-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pengelola Barang Bukti",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi CAT BKN Pengelolaan Aset Sitaan & Barang Bukti.",
-            features: [
-              "1x Sesi Ujian CAT BKN (110 Soal)",
-              "Kunci Jawaban Lengkap",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kejaksaan-bb-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pengelola Barang Bukti",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian SOP Barang Bukti, Regulasi Sita Eksekusi, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Prosedur Penyimpanan & Pemeliharaan Barang Sitaan",
-              "Paket 2: Regulasi Pemusnahan & Lelang Rampasan Negara",
-              "Paket 3: Simulasi CAT Terpadu",
-              "Ranking Nasional & Pembahasan Lengkap",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
     ],
   },
@@ -547,41 +264,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Desain instruksional digital, LMS, media e-learning, evaluasi teknologi pembelajaran nasional.",
-        packages: {
-          satuan: {
-            id: "pkg-kemendikbud-ptp-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pengembang Teknologi Pembelajaran",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Desain Instruksional & E-Learning.",
-            features: [
-              "1x Sesi CAT BKN PTP (110 Soal)",
-              "Kunci Jawaban & Pembahasan Pedagogik Digital",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemendikbud-ptp-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pengembang Teknologi Pembelajaran",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Teknologi Pendidikan, Manajemen Kurikulum, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Desain Instruksional & Produksi Media Digital",
-              "Paket 2: Evaluasi E-Learning & Kebijakan Kurikulum Merdeka",
-              "Paket 3: Simulasi Terpadu CAT BKN",
-              "Ranking Nasional Real-Time Peserta Kemendikbud",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "kemendikbud-pamong-budaya",
@@ -592,41 +274,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Pelestarian cagar budaya, diplomasi budaya, inventarisasi warisan budaya takbenda (WBTB), permuseuman.",
-        packages: {
-          satuan: {
-            id: "pkg-kemendikbud-pamong-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pamong Budaya",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi CAT BKN Cagar Budaya & UU Pemajuan Kebudayaan.",
-            features: [
-              "1x Sesi CAT BKN Pamong Budaya (110 Soal)",
-              "Kunci Jawaban Lengkap",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-kemendikbud-pamong-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pamong Budaya",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu Pelestarian Budaya, Manajemen Museum, & Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: UU No. 5/2017 & Pelestarian Cagar Budaya",
-              "Paket 2: Manajemen Museum & Diplomasi Budaya",
-              "Paket 3: Simulasi Terpadu CAT BKN",
-              "Ranking Nasional Real-Time",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
     ],
   },
@@ -649,41 +296,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Manajemen ASN, sistem merit, penilaian kinerja, disiplin PNS, dan pengembangan kompetensi aparatur.",
-        packages: {
-          satuan: {
-            id: "pkg-bkn-sdma-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Analis SDM Aparatur",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi Ujian CAT BKN Manajemen ASN & Sistem Merit.",
-            features: [
-              "1x Sesi CAT BKN Analis SDMA (110 Soal / 100 Menit)",
-              "Kunci Jawaban & Ulasan UU ASN No. 20/2023",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-bkn-sdma-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Analis SDM Aparatur",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu: Manajemen ASN, Penilaian Kinerja, & Simulasi Terpadu CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: UU ASN 20/2023, Sistem Merit & Manajemen Talenta",
-              "Paket 2: Disiplin ASN (PP 94/2021) & SKP Permenpan-RB No. 6/2022",
-              "Paket 3: Simulasi Terpadu CAT BKN",
-              "Ranking Nasional Real-Time Peserta BKN",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
       {
         id: "bkn-pranata-komputer",
@@ -694,41 +306,6 @@ export const AGENCIES_DATA: AgencyItem[] = [
         totalQuestions: 110,
         durationMinutes: 100,
         description: "Rekayasa perangkat lunak pemerintah, database kepegawaian nasional, keamanan siber, arsitektur SPBE.",
-        packages: {
-          satuan: {
-            id: "pkg-bkn-prakom-satuan",
-            type: "satuan",
-            name: "Paket Satuan SKB - Pranata Komputer",
-            price: 20000,
-            originalPrice: 30000,
-            examCount: 1,
-            description: "1x Simulasi CAT BKN Rekayasa Perangkat Lunak & SPBE.",
-            features: [
-              "1x Sesi CAT BKN Pranata Komputer (110 Soal)",
-              "Kunci Jawaban & Pembahasan IT",
-              "Masa Aktif 30 Hari",
-            ],
-          },
-          bundling: {
-            id: "pkg-bkn-prakom-bundling",
-            type: "bundling",
-            name: "Paket Bundling SKB - Pranata Komputer",
-            badge: "Paling Populer & Hemat 25%",
-            price: 45000,
-            originalPrice: 60000,
-            examCount: 3,
-            isPopular: true,
-            description: "3 Paket Ujian Terpadu: RPL & Database, Arsitektur SPBE & Jaringan, serta Simulasi CAT BKN.",
-            features: [
-              "3x Sesi Ujian Lengkap Berstandar CAT BKN",
-              "Paket 1: Pemrograman, Algoritma & Basis Data Relasional",
-              "Paket 2: Keamanan Informasi, SPBE & Infrastruktur Jaringan",
-              "Paket 3: Simulasi Terpadu CAT BKN Full Timer",
-              "Ranking Nasional Real-Time Peserta Prakom",
-              "Masa Aktif Selamanya",
-            ],
-          },
-        },
       },
     ],
   },
