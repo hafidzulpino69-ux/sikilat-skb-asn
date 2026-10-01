@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PackageOpen,
@@ -74,6 +75,7 @@ function getAgencyShortName(agencyName: string, agencyShortName?: string): strin
 }
 
 export default function MyPackagesPage() {
+  const router = useRouter();
   const [examCards, setExamCards] = useState<ExamCardItem[]>([]);
   const [justPurchased, setJustPurchased] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -235,8 +237,8 @@ export default function MyPackagesPage() {
       return;
     }
 
-    alert(
-      `[SIKILAT CAT Engine]\n\n${card.packageTitle}\nFormasi: ${card.positionTitle}\n\nNilai: ${card.score} (${card.status})\nJumlah Soal: ${card.totalQuestions} • Waktu: ${card.durationMinutes} Menit.\n\n(Alur Pembelian Paket Selesai. Siap lanjut ke Poin 2!)`
+    router.push(
+      `/exam?packageTitle=${encodeURIComponent(card.packageTitle)}&position=${encodeURIComponent(card.positionTitle)}&agency=${encodeURIComponent(card.agencyName)}`
     );
   };
 
