@@ -96,7 +96,10 @@ export function getPositionPackages(positionTitle: string): PositionPackage[] {
       isPopular: true,
       description: commonDescription,
       features: [
-        ...commonFeatures,
+        "100 butir soal CAT BKN",
+        "Waktu ujian selama 90 menit",
+        "Kunci jawaban dan pembahasan detail",
+        "Masa aktif paket 150 hari",
         "Akses ke Grup Diskusi Telegram Eksklusif",
       ],
     },

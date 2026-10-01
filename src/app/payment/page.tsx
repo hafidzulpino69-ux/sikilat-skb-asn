@@ -38,11 +38,12 @@ interface PendingOrder {
 }
 
 // =========================================================================
-// PENGATURAN DURASI MASA AKTIF PAKET:
-// KHUSUS UNTUK TESTING SAAT INI: 1 Menit (60 detik = 60 * 1000 ms)
-// UBAH KE 90 HARI DI SINI: ganti (60 * 1000) menjadi (90 * 24 * 60 * 60 * 1000)
+// PENGATURAN DURASI MASA AKTIF PAKET RESMI:
+// 1. Paket Satuan (Paket 1, 2, 3): 90 Hari (90 * 24 * 60 * 60 * 1000 ms)
+// 2. Paket Bundling (Paket 1, 2, 3): 150 Hari (150 * 24 * 60 * 60 * 1000 ms)
 // =========================================================================
-export const PACKAGE_VALIDITY_DURATION_MS = 60 * 1000; // <-- UBAH KE 90 HARI DI SINI: (90 * 24 * 60 * 60 * 1000)
+export const SINGLE_PACKAGE_DURATION_MS = 90 * 24 * 60 * 60 * 1000; // 90 Hari
+export const BUNDLING_PACKAGE_DURATION_MS = 150 * 24 * 60 * 60 * 1000; // 150 Hari
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -106,8 +107,10 @@ export default function PaymentPage() {
 
     setTimeout(() => {
       if (typeof window !== "undefined") {
+        const isBundling = order.packageKey === "bundling" || order.examNumbers.length > 1;
+        const durationMs = isBundling ? BUNDLING_PACKAGE_DURATION_MS : SINGLE_PACKAGE_DURATION_MS;
         const purchasedTime = Date.now();
-        const expiresTime = purchasedTime + PACKAGE_VALIDITY_DURATION_MS;
+        const expiresTime = purchasedTime + durationMs;
 
         const newPurchase = {
           id: `PURCHASE-${purchasedTime}-${Math.floor(Math.random() * 1000)}`,
@@ -121,7 +124,8 @@ export default function PaymentPage() {
           price: order.price,
           examNumbers: order.examNumbers,
           purchasedAt: new Date(purchasedTime).toISOString(),
-          expiresAt: new Date(expiresTime).toISOString(), // Timestamp kedaluwarsa untuk hitung mundur
+          expiresAt: new Date(expiresTime).toISOString(), // Masa aktif 90 hari (satuan) atau 150 hari (bundling)
+          durationMs,
         };
 
         // Ambil riwayat paket lama agar TIDAK tertimpa (append mode)
@@ -299,7 +303,11 @@ export default function PaymentPage() {
               </div>
               <div className="flex items-center justify-between text-xs text-[#042E64]/70">
                 <span>Masa Aktif Paket</span>
-                <span className="text-[#042E64] font-bold">90 Hari</span>
+                <span className="text-[#042E64] font-bold">
+                  {order.packageKey === "bundling" || order.examNumbers.length > 1
+                    ? "150 Hari"
+                    : "90 Hari"}
+                </span>
               </div>
               <div className="flex items-center justify-between text-base sm:text-lg font-black text-[#042E64] pt-3 border-t-2 border-[#F0DCBE]">
                 <span>Total Pembayaran</span>

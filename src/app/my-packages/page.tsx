@@ -12,18 +12,17 @@ import {
   Sparkles,
   AlertCircle,
   Clock,
-  RotateCcw,
-  Timer,
   ShieldAlert,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
 // =========================================================================
-// PENGATURAN DURASI MASA AKTIF PAKET:
-// KHUSUS UNTUK TESTING SAAT INI: 1 Menit (60 detik = 60 * 1000 ms)
-// UBAH KE 90 HARI DI SINI: ganti (60 * 1000) menjadi (90 * 24 * 60 * 60 * 1000)
+// PENGATURAN DURASI MASA AKTIF PAKET RESMI:
+// 1. Paket Satuan (Paket 1, 2, 3): 90 Hari (90 * 24 * 60 * 60 * 1000 ms)
+// 2. Paket Bundling (Paket 1, 2, 3): 150 Hari (150 * 24 * 60 * 60 * 1000 ms)
 // =========================================================================
-export const PACKAGE_VALIDITY_DURATION_MS = 60 * 1000; // <-- UBAH KE 90 HARI DI SINI: (90 * 24 * 60 * 60 * 1000)
+export const SINGLE_PACKAGE_DURATION_MS = 90 * 24 * 60 * 60 * 1000; // 90 Hari
+export const BUNDLING_PACKAGE_DURATION_MS = 150 * 24 * 60 * 60 * 1000; // 150 Hari
 
 interface PurchasedItem {
   id: string;
@@ -55,6 +54,8 @@ interface ExamCardItem {
   durationMinutes: number;
   purchasedAt: string;
   expiresAt: string;
+  isBundling: boolean;
+  validityDays: number;
 }
 
 export default function MyPackagesPage() {
@@ -91,9 +92,10 @@ export default function MyPackagesPage() {
         // =========================================================================
         // LOGIKA PENGERJAAN & TAMPILAN PAKET (APPEND MODE):
         // Setiap transaksi baru DITAMBAHKAN (append) ke dalam daftar, bukan menimpa yang lama.
-        // - Paket Satuan (Paket 1, 2, atau 3): menghasilkan 1 kotak paket yang dibeli.
-        // - Paket Bundling: menghasilkan 3 kotak terpisah (Paket 1, Paket 2, Paket 3).
+        // - Paket Satuan (Paket 1, 2, atau 3): menghasilkan 1 kotak paket yang dibeli (90 Hari).
+        // - Paket Bundling: menghasilkan 3 kotak terpisah (Paket 1, Paket 2, Paket 3) (150 Hari).
         // =========================================================================
+        let hasMigrated = false;
         const cards: ExamCardItem[] = [];
 
         list.forEach((purchase) => {
@@ -101,13 +103,29 @@ export default function MyPackagesPage() {
             ? new Date(purchase.purchasedAt).getTime()
             : Date.now();
 
-          // Gunakan expiresAt yang tersimpan atau hitung berdasarkan waktu beli + durasi
-          const expiresTime = purchase.expiresAt
-            ? new Date(purchase.expiresAt).getTime()
-            : purchasedTime + PACKAGE_VALIDITY_DURATION_MS;
-
           const isBundling =
             purchase.packageKey === "bundling" || purchase.examNumbers.length > 1;
+          const standardDurationMs = isBundling
+            ? BUNDLING_PACKAGE_DURATION_MS
+            : SINGLE_PACKAGE_DURATION_MS;
+
+          // Periksa apakah data tersimpan berasal dari mode testing 1 menit (<= 24 jam)
+          // Jika iya atau jika belum ada expiresAt, upgrade otomatis ke masa aktif aslinya
+          let expiresTime = purchase.expiresAt
+            ? new Date(purchase.expiresAt).getTime()
+            : purchasedTime + standardDurationMs;
+
+          if (
+            !purchase.expiresAt ||
+            expiresTime - purchasedTime <= 24 * 60 * 60 * 1000
+          ) {
+            expiresTime = purchasedTime + standardDurationMs;
+            purchase.expiresAt = new Date(expiresTime).toISOString();
+            purchase.durationMs = standardDurationMs;
+            hasMigrated = true;
+          }
+
+          const validityDays = isBundling ? 150 : 90;
 
           if (isBundling) {
             // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
@@ -125,6 +143,8 @@ export default function MyPackagesPage() {
                 durationMinutes: 90,
                 purchasedAt: new Date(purchasedTime).toISOString(),
                 expiresAt: new Date(expiresTime).toISOString(),
+                isBundling: true,
+                validityDays: 150,
               });
             });
           } else {
@@ -149,9 +169,16 @@ export default function MyPackagesPage() {
               durationMinutes: 90,
               purchasedAt: new Date(purchasedTime).toISOString(),
               expiresAt: new Date(expiresTime).toISOString(),
+              isBundling: false,
+              validityDays: 90,
             });
           }
         });
+
+        // Simpan kembali jika ada data pengujian yang di-upgrade ke masa berlaku resmi
+        if (hasMigrated) {
+          localStorage.setItem("skb_user_purchased_packages", JSON.stringify(list));
+        }
 
         setExamCards(cards);
       } else {
@@ -181,33 +208,6 @@ export default function MyPackagesPage() {
       minutes,
       seconds,
     };
-  };
-
-  // Helper perpanjang timer khusus testing (+1 Menit)
-  const handleResetTestingTimer = () => {
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("skb_user_purchased_packages");
-      if (raw) {
-        try {
-          const list: PurchasedItem[] = JSON.parse(raw);
-          const newExpiresAt = new Date(Date.now() + PACKAGE_VALIDITY_DURATION_MS).toISOString();
-          list.forEach((item) => {
-            item.expiresAt = newExpiresAt;
-          });
-          localStorage.setItem("skb_user_purchased_packages", JSON.stringify(list));
-
-          setExamCards((prev) =>
-            prev.map((c) => ({
-              ...c,
-              expiresAt: newExpiresAt,
-            }))
-          );
-          setCurrentTime(Date.now());
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
   };
 
   const handleStartExam = (card: ExamCardItem) => {
@@ -245,34 +245,6 @@ export default function MyPackagesPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Banner Testing Info Khusus Durasi 1 Menit */}
-        <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
-              <Timer className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-black text-amber-900 block">
-                Mode Pengujian Hitung Mundur Aktif (Testing: 1 Menit / 60 Detik)
-              </span>
-              <span className="text-amber-800/80 font-medium">
-                Durasi disetel 1 Menit agar Anda dapat memantau transisi tombol menjadi <strong>&quot;Paket Hangus&quot;</strong> secara instan.
-                Ganti ke 90 hari pada kode yang bertanda: <code>// UBAH KE 90 HARI DI SINI</code>.
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetTestingTimer}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-bold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer whitespace-nowrap"
-            title="Perbarui hitungan mundur ke 1 menit lagi untuk uji coba ulang"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-            <span>Reset Timer (+1 Menit Testing)</span>
-          </button>
-        </div>
-
         {/* Banner Sukses Pembayaran jika baru saja checkout */}
         {justPurchased && (
           <div className="p-4 sm:p-5 rounded-3xl bg-emerald-50 border-2 border-emerald-300 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
@@ -285,7 +257,7 @@ export default function MyPackagesPage() {
                   Paket Berhasil Ditambahkan ke Akun Anda!
                 </div>
                 <div className="text-xs text-emerald-800 font-medium">
-                  Paket soal Anda telah aktif dengan masa aktif 90 hari (sedang dalam mode testing 1 menit).
+                  Paket soal Anda telah aktif dan siap dikerjakan sesuai masa aktif (90 hari untuk Paket Satuan, 150 hari untuk Paket Bundling).
                 </div>
               </div>
             </div>
@@ -418,7 +390,7 @@ export default function MyPackagesPage() {
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
-                              Aktif (Masa Aktif 90 Hari)
+                              Aktif (Masa Aktif {card.validityDays} Hari)
                             </span>
                           )}
                         </div>
@@ -553,7 +525,7 @@ export default function MyPackagesPage() {
           <div className="space-y-1">
             <strong className="font-black text-[#042E64] text-sm">Ketentuan Masa Berlaku Paket:</strong>
             <p className="text-[#042E64]/80 leading-relaxed font-medium">
-              Setiap paket soal memiliki masa aktif resmi selama <strong>90 Hari</strong> sejak waktu pembelian. Apabila masa aktif habis sebelum Anda menyelesaikan ujian, tombol pengerjaan otomatis berubah menjadi <strong>&quot;Paket Hangus&quot;</strong>.
+              Setiap paket soal memiliki masa aktif resmi: <strong>90 Hari</strong> untuk Paket Satuan dan <strong>150 Hari</strong> untuk Paket Bundling sejak waktu pembelian. Apabila masa aktif habis sebelum Anda menyelesaikan ujian, tombol pengerjaan otomatis berubah menjadi <strong>&quot;Paket Hangus&quot;</strong>.
             </p>
           </div>
         </div>
