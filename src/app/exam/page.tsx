@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   X,
   ShieldAlert,
+  Save,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { DUMMY_EXAM_QUESTIONS, ExamQuestion } from "@/data/dummyExamQuestions";
@@ -31,6 +32,15 @@ import { DUMMY_EXAM_QUESTIONS, ExamQuestion } from "@/data/dummyExamQuestions";
 // Waktu default ujian resmi: 90 Menit = 5400 Detik (01:30:00)
 const TOTAL_EXAM_SECONDS = 90 * 60;
 const TOTAL_QUESTIONS_COUNT = 100;
+
+interface ExamAutosaveSession {
+  cardId: string;
+  secondsLeft: number;
+  answers: Record<number, "A" | "B" | "C" | "D" | "E">;
+  doubtfulQuestions: Record<number, boolean>;
+  currentIndex: number;
+  lastSavedAt: string;
+}
 
 function ExamEngineContent() {
   const router = useRouter();
@@ -41,6 +51,9 @@ function ExamEngineContent() {
   const packageTitleParam = searchParams.get("packageTitle") || "Paket 1: SKB Formasi";
   const positionParam = searchParams.get("position") || "Petugas Pengelola Barang Bukti";
   const agencyParam = searchParams.get("agency") || "Kejaksaan Republik Indonesia";
+
+  // Key unik autosave per paket ujian di localStorage
+  const sessionKey = `skb_exam_session_${cardIdParam}`;
 
   // Data Peserta
   const [userName, setUserName] = useState("Peserta Simulasi CAT");
@@ -63,6 +76,11 @@ function ExamEngineContent() {
   const [showFinishModal, setShowFinishModal] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<"normal" | "large">("normal");
 
+  // State Resume & Autosave
+  const [isSessionLoaded, setIsSessionLoaded] = useState<boolean>(false);
+  const [hasResumed, setHasResumed] = useState<boolean>(false);
+  const [lastSavedTimeStr, setLastSavedTimeStr] = useState<string>("");
+
   // Mobile Grid Drawer State
   const [showMobileGrid, setShowMobileGrid] = useState<boolean>(false);
 
@@ -82,9 +100,49 @@ function ExamEngineContent() {
     }
   }, []);
 
-  // Countdown Interval 90 Menit (5400 Detik)
+  // =========================================================================
+  // LOGIKA 2: FITUR RESUME (Lanjutkan Ujian Saat Komponen Di-mount)
+  // =========================================================================
   useEffect(() => {
-    if (isFinished || secondsLeft <= 0) return;
+    if (typeof window !== "undefined") {
+      try {
+        const rawSession = localStorage.getItem(sessionKey);
+        if (rawSession) {
+          const session: ExamAutosaveSession = JSON.parse(rawSession);
+
+          // Cek apakah ada session valid yang belum selesai (> 0 detik)
+          if (session && typeof session.secondsLeft === "number" && session.secondsLeft > 0) {
+            setSecondsLeft(session.secondsLeft);
+            if (session.answers) setAnswers(session.answers);
+            if (session.doubtfulQuestions) setDoubtfulQuestions(session.doubtfulQuestions);
+            if (
+              typeof session.currentIndex === "number" &&
+              session.currentIndex >= 0 &&
+              session.currentIndex < TOTAL_QUESTIONS_COUNT
+            ) {
+              setCurrentIndex(session.currentIndex);
+            }
+            setHasResumed(true);
+            setLastSavedTimeStr(session.lastSavedAt || new Date().toISOString());
+          } else {
+            // Jika data sesi sudah 0 detik atau rusak, bersihkan
+            localStorage.removeItem(sessionKey);
+          }
+        }
+      } catch (e) {
+        console.error("Gagal membaca session autosave ujian:", e);
+      } finally {
+        setIsSessionLoaded(true);
+      }
+    }
+  }, [sessionKey]);
+
+  // =========================================================================
+  // LOGIKA 1: SISTEM AUTOSAVE BERKALA (Setiap 1 Detik & Saat State Berubah)
+  // =========================================================================
+  // Countdown Interval 1 Detik (hanya berjalan setelah session di-load)
+  useEffect(() => {
+    if (!isSessionLoaded || isFinished || secondsLeft <= 0) return;
 
     const timer = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -97,7 +155,29 @@ function ExamEngineContent() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isFinished, secondsLeft]);
+  }, [isSessionLoaded, isFinished, secondsLeft]);
+
+  // Autosave Otomatis ke localStorage setiap detik dan setiap ada perubahan state
+  useEffect(() => {
+    if (!isSessionLoaded || isFinished) return;
+
+    // Jangan simpan jika waktu sudah habis (karena pembersihan akan dilakukan oleh finish handler)
+    if (secondsLeft <= 0) return;
+
+    try {
+      const sessionData: ExamAutosaveSession = {
+        cardId: cardIdParam,
+        secondsLeft,
+        answers,
+        doubtfulQuestions,
+        currentIndex,
+        lastSavedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+    } catch (e) {
+      console.error("Gagal melakukan autosave:", e);
+    }
+  }, [isSessionLoaded, isFinished, secondsLeft, answers, doubtfulQuestions, currentIndex, sessionKey, cardIdParam]);
 
   // Format Waktu: 01:30:00 (HH:MM:SS)
   const formattedTime = useMemo(() => {
@@ -134,22 +214,54 @@ function ExamEngineContent() {
     };
   }, [answers, doubtfulQuestions, questions]);
 
-  // Handler Pilih Opsi Jawaban (A, B, C, D, E)
+  // Handler Pilih Opsi Jawaban (A, B, C, D, E) dengan Instant Save
   const handleSelectOption = (key: "A" | "B" | "C" | "D" | "E") => {
     if (isFinished) return;
-    setAnswers((prev) => ({
-      ...prev,
+    const updatedAnswers = {
+      ...answers,
       [currentQuestion.id]: key,
-    }));
+    };
+    setAnswers(updatedAnswers);
+
+    // Instant save ke localStorage saat opsi dipilih
+    try {
+      const sessionData: ExamAutosaveSession = {
+        cardId: cardIdParam,
+        secondsLeft,
+        answers: updatedAnswers,
+        doubtfulQuestions,
+        currentIndex,
+        lastSavedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  // Handler Toggle Ragu-ragu (Warna Kuning)
+  // Handler Toggle Ragu-ragu (Warna Kuning) dengan Instant Save
   const handleToggleDoubtful = () => {
     if (isFinished) return;
-    setDoubtfulQuestions((prev) => ({
-      ...prev,
-      [currentQuestion.id]: !prev[currentQuestion.id],
-    }));
+    const updatedDoubtful = {
+      ...doubtfulQuestions,
+      [currentQuestion.id]: !doubtfulQuestions[currentQuestion.id],
+    };
+    setDoubtfulQuestions(updatedDoubtful);
+
+    // Instant save ke localStorage saat tombol ragu diklik
+    try {
+      const sessionData: ExamAutosaveSession = {
+        cardId: cardIdParam,
+        secondsLeft,
+        answers,
+        doubtfulQuestions: updatedDoubtful,
+        currentIndex,
+        lastSavedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Handler Tombol 'Sebelumnya'
@@ -178,7 +290,9 @@ function ExamEngineContent() {
     setShowMobileGrid(false);
   };
 
-  // Handler Selesaikan Ujian & Hitung Nilai Otomatis (1 benar = 5 poin, maks 500)
+  // =========================================================================
+  // LOGIKA 3: CLEAR DATA & SELESAIKAN UJIAN
+  // =========================================================================
   const handleConfirmFinish = () => {
     setIsFinished(true);
     setShowFinishModal(false);
@@ -202,6 +316,16 @@ function ExamEngineContent() {
     const calculatedScore = correctCount * 5; // 1 soal benar bernilai 5 poin, maksimal 500
 
     if (typeof window !== "undefined") {
+      // 1. BERSIHKAN (CLEAR) DATA AUTOSAVE DARI LOCALSTORAGE
+      // Agar retake ujian di lain waktu benar-benar mulai dari awal lagi (90 menit & kosong)
+      try {
+        localStorage.removeItem(sessionKey);
+        localStorage.removeItem("skb_exam_session_default-exam-card");
+      } catch (e) {
+        console.error("Gagal menghapus autosave session:", e);
+      }
+
+      // 2. Simpan skor tertinggi akun
       let existingScores: Record<
         string,
         {
@@ -238,7 +362,7 @@ function ExamEngineContent() {
 
       localStorage.setItem("skb_package_scores", JSON.stringify(existingScores));
 
-      // Simpan data lengkap hasil ujian terakhir untuk ditampilkan di halaman /exam/result
+      // 3. Simpan data lengkap hasil ujian terakhir untuk ditampilkan di halaman /exam/result & /pembahasan
       const lastExamResult = {
         cardId: cardIdParam,
         packageTitle: packageTitleParam,
@@ -265,12 +389,12 @@ function ExamEngineContent() {
     router.push("/exam/result");
   };
 
-  // Otomatis akhiri ujian jika waktu 90 menit habis
+  // Otomatis akhiri ujian jika waktu 90 menit habis (Timer = 00:00:00)
   useEffect(() => {
-    if (secondsLeft === 0 && !isFinished) {
+    if (isSessionLoaded && secondsLeft === 0 && !isFinished) {
       handleConfirmFinish();
     }
-  }, [secondsLeft, isFinished]);
+  }, [isSessionLoaded, secondsLeft, isFinished]);
 
   // Status Warna Kotak Navigasi
   const getNavBoxStyle = (questionId: number, index: number) => {
@@ -300,8 +424,43 @@ function ExamEngineContent() {
   const isCurrentDoubtful = !!doubtfulQuestions[currentQuestion.id];
   const currentSelectedOption = answers[currentQuestion.id];
 
+  if (!isSessionLoaded) {
+    return (
+      <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
+        <div className="p-6 rounded-2xl bg-white border-2 border-slate-200 shadow-md flex items-center gap-3">
+          <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-black text-[#042E64]">Memeriksa Sesi &amp; Memuat Lembar Ujian CAT BKN...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F4F6F9] flex flex-col font-sans select-none">
+      {/* ========================================================================= */}
+      {/* BANNER NOTIFIKASI RESUME SESI UJIAN (JIKA ADA SESI SEBELUMNYA)             */}
+      {/* ========================================================================= */}
+      {hasResumed && (
+        <div className="bg-emerald-600 text-white px-4 py-2 text-xs font-bold shadow-xs animate-in slide-in-from-top-2 duration-300">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-emerald-200 shrink-0" />
+              <span>
+                <strong>Sesi Ujian Berhasil Dipulihkan!</strong> Melanjutkan soal No. {currentIndex + 1} dengan sisa waktu {formattedTime}. Jawaban dan status ragu-ragu Anda telah otomatis dimuat kembali.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHasResumed(false)}
+              className="text-white hover:text-emerald-100 p-1 font-black cursor-pointer text-sm"
+              title="Tutup pemberitahuan"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 1. AREA HEADER (INFORMASI UJIAN CAT BKN)                                  */}
       {/* ========================================================================= */}
@@ -321,7 +480,7 @@ function ExamEngineContent() {
             </div>
           </div>
 
-          {/* Indikator Tengah: Soal No. [X] dari 110 */}
+          {/* Indikator Tengah: Soal No. [X] dari 100 */}
           <div className="flex items-center gap-2 bg-[#0B3E84] px-3.5 py-1.5 rounded-xl border border-blue-400/30 shadow-xs">
             <span className="text-[11px] uppercase tracking-wider font-bold text-blue-200 hidden xs:inline">
               Indikator:
@@ -331,8 +490,15 @@ function ExamEngineContent() {
             </span>
           </div>
 
-          {/* Sisa Waktu (Countdown Timer 100 Menit) */}
-          <div className="flex items-center gap-2">
+          {/* Sisa Waktu & Status Autosave */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Indikator Autosave Aktif */}
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-950/70 border border-emerald-400/30 text-[10px] font-bold text-emerald-300 shadow-inner">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Autosave Aktif</span>
+            </div>
+
+            {/* Sisa Waktu (Countdown Timer 90 Menit) */}
             <div
               className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-mono border-2 shadow-inner transition-colors ${
                 secondsLeft < 300
@@ -542,7 +708,7 @@ function ExamEngineContent() {
         </section>
 
         {/* ======================================================================= */}
-        {/* 4. AREA NAVIGASI NOMOR SOAL (GRID 1 - 110) (KOLOM KANAN: 4 KOLOM)        */}
+        {/* 4. AREA NAVIGASI NOMOR SOAL (GRID 1 - 100) (KOLOM KANAN: 4 KOLOM)        */}
         {/* ======================================================================= */}
         <aside className="lg:col-span-4 bg-white rounded-2xl border-2 border-slate-200/90 shadow-sm p-4 sm:p-5 flex flex-col justify-between sticky top-24">
           <div className="space-y-4">
@@ -574,7 +740,7 @@ function ExamEngineContent() {
               </div>
             </div>
 
-            {/* Kotak-kotak Angka 1 sampai 110 */}
+            {/* Kotak-kotak Angka 1 sampai 100 */}
             <div className="max-h-[360px] sm:max-h-[420px] overflow-y-auto pr-1">
               <div className="grid grid-cols-5 sm:grid-cols-5 gap-1.5">
                 {questions.map((q, idx) => {
