@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,18 +12,14 @@ import {
   ArrowLeft,
   RotateCcw,
   BookOpen,
-  Filter,
-  Check,
-  X,
-  Layers,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
-  AlertTriangle,
-  Lightbulb,
+  ArrowRight,
+  Check,
+  CheckCircle,
+  Layers,
+  ChevronRight,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
-import { DUMMY_EXAM_QUESTIONS, ExamQuestion } from "@/data/dummyExamQuestions";
 
 interface LastExamResult {
   cardId: string;
@@ -48,11 +44,6 @@ function ExamResultContent() {
   const router = useRouter();
   const [result, setResult] = useState<LastExamResult | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [showDiscussion, setShowDiscussion] = useState(false);
-  const [filterType, setFilterType] = useState<"all" | "wrong" | "correct" | "unanswered">("all");
-  const [searchQuestionNo, setSearchQuestionNo] = useState<number | null>(null);
-
-  const questions: ExamQuestion[] = DUMMY_EXAM_QUESTIONS;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -97,23 +88,6 @@ function ExamResultContent() {
   const isPassing = (result?.score ?? 0) >= 350;
   const isNewRecord = result ? result.score >= result.highestScore && result.score > result.previousHighest : false;
 
-  // Filter daftar soal pembahasan
-  const filteredQuestions = useMemo(() => {
-    if (!result) return questions;
-
-    return questions.filter((q) => {
-      const userAns = result.userAnswers[q.id];
-      const isCorrect = userAns === q.correctAnswer;
-      const isUnanswered = !userAns;
-      const isWrong = !!userAns && !isCorrect;
-
-      if (filterType === "correct") return isCorrect;
-      if (filterType === "wrong") return isWrong;
-      if (filterType === "unanswered") return isUnanswered;
-      return true;
-    });
-  }, [questions, result, filterType]);
-
   const handleRetakeExam = () => {
     if (!result) {
       router.push("/exam");
@@ -124,22 +98,12 @@ function ExamResultContent() {
     );
   };
 
-  const scrollToQuestion = (questionId: number) => {
-    setShowDiscussion(true);
-    setTimeout(() => {
-      const element = document.getElementById(`discussion-question-${questionId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 100);
-  };
-
   if (!isLoaded || !result) {
     return (
       <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
         <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center gap-3">
           <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-bold text-[#042E64]">Memuat Hasil Ujian &amp; Pembahasan...</span>
+          <span className="text-sm font-bold text-[#042E64]">Memuat Hasil Ujian...</span>
         </div>
       </div>
     );
@@ -297,20 +261,15 @@ function ExamResultContent() {
             {/* Tombol Aksi Utama */}
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                {/* Tombol 'Lihat Pembahasan' Sesuai Instruksi User */}
-                <button
-                  type="button"
-                  onClick={() => setShowDiscussion(!showDiscussion)}
-                  className={`w-full sm:w-auto py-3.5 px-6 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                    showDiscussion
-                      ? "bg-[#042E64] text-white hover:bg-[#0B3E84]"
-                      : "bg-[#FB6E09] text-white hover:bg-[#E45E00] shadow-[#FB6E09]/30"
-                  }`}
+                {/* Tombol 'Lihat Pembahasan' diarahkan ke route khusus /pembahasan */}
+                <Link
+                  href="/pembahasan"
+                  className="w-full sm:w-auto py-3.5 px-6 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md bg-[#FB6E09] text-white hover:bg-[#E45E00] shadow-[#FB6E09]/30"
                 >
                   <BookOpen className="w-4 h-4" />
-                  <span>{showDiscussion ? "Tutup Pembahasan" : "Lihat Pembahasan"}</span>
-                  {showDiscussion ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
+                  <span>Lihat Pembahasan</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
 
                 <button
                   type="button"
@@ -333,225 +292,42 @@ function ExamResultContent() {
         </div>
 
         {/* ========================================================================= */}
-        {/* FITUR PEMBAHASAN DETAIL 100 SOAL                                         */}
+        {/* BANNER PROMOSI HALAMAN PEMBAHASAN KHUSUS                                 */}
         {/* ========================================================================= */}
-        {showDiscussion && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
-            {/* Header Pembahasan & Filter */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border-2 border-slate-200/90 shadow-md space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-black uppercase tracking-wider">
-                    <BookOpen className="w-3.5 h-3.5 text-[#042E64]" />
-                    <span>Kunci Jawaban &amp; Pembahasan Resmi</span>
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-[#042E64]">
-                    Pembahasan 100 Soal CAT BKN
-                  </h2>
-                </div>
-
-                {/* Filter Tabs */}
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
-                  <button
-                    type="button"
-                    onClick={() => setFilterType("all")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-colors whitespace-nowrap cursor-pointer ${
-                      filterType === "all" ? "bg-white text-[#042E64] shadow-xs" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Semua ({questions.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterType("wrong")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-colors whitespace-nowrap cursor-pointer ${
-                      filterType === "wrong" ? "bg-rose-600 text-white shadow-xs" : "text-rose-700 hover:bg-rose-100"
-                    }`}
-                  >
-                    Salah ({result.wrongCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterType("correct")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-colors whitespace-nowrap cursor-pointer ${
-                      filterType === "correct" ? "bg-emerald-600 text-white shadow-xs" : "text-emerald-700 hover:bg-emerald-100"
-                    }`}
-                  >
-                    Benar ({result.correctCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterType("unanswered")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-colors whitespace-nowrap cursor-pointer ${
-                      filterType === "unanswered" ? "bg-slate-700 text-white shadow-xs" : "text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Kosong ({result.unansweredCount})
-                  </button>
-                </div>
-              </div>
-
-              {/* Mini Quick Jump Grid 1 - 100 */}
-              <div className="pt-3 border-t border-slate-200">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Lompat Cepat ke Nomor Soal:
-                </div>
-                <div className="max-h-24 overflow-y-auto pr-1">
-                  <div className="grid grid-cols-10 sm:grid-cols-20 gap-1">
-                    {questions.map((q) => {
-                      const userAns = result.userAnswers[q.id];
-                      const isCorrect = userAns === q.correctAnswer;
-                      const isUnanswered = !userAns;
-
-                      let boxStyle = "bg-rose-500 text-white border-rose-600";
-                      if (isCorrect) boxStyle = "bg-emerald-600 text-white border-emerald-700";
-                      if (isUnanswered) boxStyle = "bg-slate-200 text-slate-700 border-slate-300";
-
-                      return (
-                        <button
-                          key={q.id}
-                          type="button"
-                          onClick={() => scrollToQuestion(q.id)}
-                          className={`h-7 rounded text-[11px] font-bold border transition-transform hover:scale-110 cursor-pointer ${boxStyle}`}
-                          title={`Lihat Pembahasan No. ${q.questionNumber}`}
-                        >
-                          {q.questionNumber}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+        <div className="bg-gradient-to-br from-[#042E64] to-[#08428C] rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border-2 border-blue-400/20">
+          <div className="space-y-3 text-center md:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FB6E09] text-white text-xs font-black uppercase tracking-wider shadow-xs">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Halaman Khusus Pembahasan</span>
             </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white">
+              Evaluasi &amp; Pelajari Kunci Jawaban Resmi 100 Soal
+            </h2>
+            <p className="text-xs sm:text-sm text-blue-100 max-w-xl leading-relaxed">
+              Tinjau kembali seluruh 100 butir soal simulasi CAT Anda. Dilengkapi dengan navigasi grid 1-100, tanda visual jawaban benar/salah, kunci jawaban valid BKN, serta kotak penjelasan mendalam.
+            </p>
 
-            {/* List 100 Soal dan Pembahasan */}
-            <div className="space-y-5">
-              {filteredQuestions.map((q) => {
-                const userAns = result.userAnswers[q.id];
-                const isCorrect = userAns === q.correctAnswer;
-                const isUnanswered = !userAns;
-
-                return (
-                  <div
-                    key={q.id}
-                    id={`discussion-question-${q.id}`}
-                    className={`bg-white rounded-3xl border-2 transition-all p-5 sm:p-7 shadow-sm space-y-5 ${
-                      isCorrect
-                        ? "border-emerald-200 hover:border-emerald-400"
-                        : isUnanswered
-                        ? "border-slate-300"
-                        : "border-rose-200 hover:border-rose-400"
-                    }`}
-                  >
-                    {/* Header Soal & Indikator Hasil */}
-                    <div className="flex flex-wrap items-center justify-between pb-3.5 border-b border-slate-200 gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="px-3 py-1 rounded-xl font-black text-sm bg-[#042E64] text-white">
-                          Soal No. {q.questionNumber}
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-[#042E64] border border-blue-200">
-                          {q.category}
-                        </span>
-                      </div>
-
-                      <div>
-                        {isCorrect ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-700" />
-                            <span>Jawaban Anda Benar (+5 Poin)</span>
-                          </span>
-                        ) : isUnanswered ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700 border border-slate-300">
-                            <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Tidak Dijawab (0 Poin)</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
-                            <X className="w-3.5 h-3.5 stroke-[3] text-rose-600" />
-                            <span>Jawaban Anda Salah (0 Poin)</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Teks Soal */}
-                    <div className="text-slate-800 text-sm sm:text-base font-semibold leading-relaxed">
-                      {q.questionText}
-                    </div>
-
-                    {/* Opsi Jawaban (A, B, C, D, E) */}
-                    <div className="space-y-2.5 pt-1">
-                      {q.options.map((opt) => {
-                        const isUserChoice = userAns === opt.key;
-                        const isCorrectKey = q.correctAnswer === opt.key;
-
-                        let cardStyle = "bg-white border-slate-200 text-slate-700";
-                        let badgeStyle = "bg-slate-100 text-slate-700 border-slate-300";
-
-                        if (isCorrectKey) {
-                          cardStyle = "bg-emerald-50/80 border-emerald-500 text-emerald-950 font-bold ring-1 ring-emerald-400";
-                          badgeStyle = "bg-emerald-600 text-white font-black";
-                        } else if (isUserChoice && !isCorrectKey) {
-                          cardStyle = "bg-rose-50/80 border-rose-400 text-rose-950 font-semibold ring-1 ring-rose-300";
-                          badgeStyle = "bg-rose-600 text-white font-black";
-                        }
-
-                        return (
-                          <div
-                            key={opt.key}
-                            className={`p-3 sm:p-3.5 rounded-2xl border-2 flex items-start gap-3 transition-colors ${cardStyle}`}
-                          >
-                            <div
-                              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 border ${badgeStyle}`}
-                            >
-                              {opt.key}
-                            </div>
-
-                            <div className="flex-1 text-xs sm:text-sm leading-snug pt-0.5">
-                              {opt.text}
-                            </div>
-
-                            {/* Label Indikator Pilihan */}
-                            <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-black">
-                              {isUserChoice && (
-                                <span
-                                  className={`px-2 py-0.5 rounded-full ${
-                                    isCorrectKey
-                                      ? "bg-emerald-200 text-emerald-900 border border-emerald-400"
-                                      : "bg-rose-200 text-rose-900 border border-rose-400"
-                                  }`}
-                                >
-                                  {isCorrectKey ? "✓ Jawaban Anda (Benar)" : "✕ Jawaban Anda (Salah)"}
-                                </span>
-                              )}
-
-                              {isCorrectKey && !isUserChoice && (
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                  ★ Kunci Jawaban Benar
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Kotak Teks Penjelasan Pembahasannya */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/90 border-2 border-blue-200/90 text-blue-950 space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#042E64]">
-                        <Lightbulb className="w-4 h-4 text-[#FB6E09]" />
-                        <span>Kunci Jawaban: {q.correctAnswer} • Pembahasan Lengkap:</span>
-                      </div>
-                      <p className="text-xs sm:text-sm leading-relaxed text-slate-800 font-medium">
-                        {q.explanation}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-1 text-xs text-blue-200">
+              <span className="flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-400 stroke-[3]" /> Grid Navigasi 100 Soal
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-400 stroke-[3]" /> Filter Benar / Salah
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-400 stroke-[3]" /> Pembahasan Logis
+              </span>
             </div>
           </div>
-        )}
+
+          <Link
+            href="/pembahasan"
+            className="shrink-0 py-4 px-8 rounded-2xl bg-[#FB6E09] text-white font-black text-sm hover:bg-[#E45E00] shadow-lg shadow-[#FB6E09]/30 transition-all flex items-center gap-2 hover:translate-x-1"
+          >
+            <span>Buka Pembahasan Lengkap</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </main>
     </div>
   );
