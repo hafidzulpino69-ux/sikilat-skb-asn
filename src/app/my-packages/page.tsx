@@ -48,6 +48,7 @@ interface ExamCardItem {
   packageTitle: string;
   positionTitle: string;
   agencyName: string;
+  agencyShortName?: string;
   score: number;
   status: "Belum Dikerjakan" | "Selesai" | "Hangus";
   totalQuestions: number;
@@ -56,6 +57,20 @@ interface ExamCardItem {
   expiresAt: string;
   isBundling: boolean;
   validityDays: number;
+}
+
+// Helper untuk format nama instansi yang ringkas dan profesional
+function getAgencyShortName(agencyName: string, agencyShortName?: string): string {
+  if (agencyShortName && agencyShortName.trim()) return agencyShortName;
+  if (!agencyName) return "Instansi";
+  const lower = agencyName.toLowerCase();
+  if (lower.includes("pendidikan") || lower.includes("kemdikbud") || lower.includes("kemendikbud")) return "Kemdikbud";
+  if (lower.includes("kesehatan") || lower.includes("kemenkes")) return "Kemenkes";
+  if (lower.includes("keuangan") || lower.includes("kemenkeu")) return "Kemenkeu";
+  if (lower.includes("kejaksaan")) return "Kejaksaan";
+  if (lower.includes("hukum") || lower.includes("kemenkumham")) return "Kemenkumham";
+  if (lower.includes("agama") || lower.includes("kemenag")) return "Kemenag";
+  return agencyName;
 }
 
 export default function MyPackagesPage() {
@@ -126,6 +141,7 @@ export default function MyPackagesPage() {
           }
 
           const validityDays = isBundling ? 150 : 90;
+          const agencyLabel = getAgencyShortName(purchase.agencyName, purchase.agencyShortName);
 
           if (isBundling) {
             // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
@@ -134,9 +150,10 @@ export default function MyPackagesPage() {
                 cardId: `${purchase.id}-exam-${num}`,
                 purchaseId: purchase.id,
                 examNumber: num,
-                packageTitle: `Paket ${num}: SKB Formasi`,
+                packageTitle: `Paket ${num}: SKB ${agencyLabel}`,
                 positionTitle: purchase.positionTitle,
                 agencyName: purchase.agencyName,
+                agencyShortName: purchase.agencyShortName,
                 score: 0, // Nilai default 0 sesuai instruksi
                 status: "Belum Dikerjakan",
                 totalQuestions: 100,
@@ -160,9 +177,10 @@ export default function MyPackagesPage() {
               cardId: `${purchase.id}-exam-${num}`,
               purchaseId: purchase.id,
               examNumber: num,
-              packageTitle: `Paket ${num}: SKB Formasi`,
+              packageTitle: `Paket ${num}: SKB ${agencyLabel}`,
               positionTitle: purchase.positionTitle,
               agencyName: purchase.agencyName,
+              agencyShortName: purchase.agencyShortName,
               score: 0, // Nilai: 0
               status: "Belum Dikerjakan",
               totalQuestions: 100,
@@ -218,7 +236,7 @@ export default function MyPackagesPage() {
     }
 
     alert(
-      `[SIKILAT CAT Engine]\n\nKerjakan paket soal ${card.examNumber} dengan jabatan ${card.positionTitle} Instansi ${card.agencyName}\n\nNilai: ${card.score} (Belum dikerjakan)\nJumlah Soal: ${card.totalQuestions} • Waktu: ${card.durationMinutes} Menit.\n\n(Alur Pembelian Paket Selesai. Siap lanjut ke Poin 2!)`
+      `[SIKILAT CAT Engine]\n\n${card.packageTitle}\nFormasi: ${card.positionTitle}\n\nNilai: ${card.score} (${card.status})\nJumlah Soal: ${card.totalQuestions} • Waktu: ${card.durationMinutes} Menit.\n\n(Alur Pembelian Paket Selesai. Siap lanjut ke Poin 2!)`
     );
   };
 
@@ -348,40 +366,34 @@ export default function MyPackagesPage() {
                     </span>
                   </div>
 
-                  <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                  <div className="p-5 space-y-3.5 flex-1 flex flex-col justify-between">
                     <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug">
+                      {/* 1. Judul Utama & 2. Sub-Judul Formasi */}
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black text-[#042E64] leading-snug tracking-tight">
                           {card.packageTitle}
                         </h3>
+                        <p className="text-xs sm:text-[13px] text-[#042E64]/70 font-medium mt-1">
+                          Formasi: <span className="text-[#042E64] font-semibold">{card.positionTitle}</span>
+                        </p>
                       </div>
 
-                      {/* TEKS INSTRUKSI SPESIFIK SESUAI PERMINTAAN USER: */}
-                      {/* 'Kerjakan paket soal [Nomor] dengan jabatan [Nama Jabatan] Instansi [Nama Instansi]' */}
-                      <div className="p-3.5 rounded-2xl bg-[#FCF4E7] border border-[#F0DCBE] text-xs text-[#042E64] leading-relaxed font-semibold">
-                        Kerjakan paket soal <strong>{card.examNumber}</strong> dengan jabatan{" "}
-                        <strong className="text-[#FB6E09]">{card.positionTitle}</strong> Instansi{" "}
-                        <strong>{card.agencyName}</strong>.
-                      </div>
-
-                      {/* ================================================================= */}
-                      {/* UI HITUNG MUNDUR (COUNTDOWN) MASA BERLAKU: HARI, JAM, MENIT, DETIK */}
-                      {/* ================================================================= */}
+                      {/* 4. Komponen Hitung Mundur (Masa Berlaku) */}
                       <div
-                        className={`p-3.5 rounded-2xl border transition-all ${
+                        className={`p-3 rounded-2xl border transition-all ${
                           isExpired
-                            ? "bg-rose-50 border-rose-200 text-rose-900"
-                            : "bg-[#FCF4E7]/80 border-amber-300/80 text-[#042E64]"
+                            ? "bg-rose-50/80 border-rose-200 text-rose-900"
+                            : "bg-[#FCF4E7]/70 border-amber-300/70 text-[#042E64]"
                         }`}
                       >
                         <div className="flex items-center justify-between text-[11px] font-bold mb-2">
-                          <span className="flex items-center gap-1.5">
+                          <span className="flex items-center gap-1.5 text-[#042E64]">
                             <Clock
                               className={`w-3.5 h-3.5 ${
                                 isExpired ? "text-rose-600" : "text-[#FB6E09] animate-pulse"
                               }`}
                             />
-                            <span>Masa Berlaku Paket:</span>
+                            <span>Masa Berlaku:</span>
                           </span>
 
                           {isExpired ? (
@@ -390,7 +402,7 @@ export default function MyPackagesPage() {
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
-                              Aktif (Masa Aktif {card.validityDays} Hari)
+                              Aktif ({card.validityDays} Hari)
                             </span>
                           )}
                         </div>
@@ -398,13 +410,13 @@ export default function MyPackagesPage() {
                         {/* Grid Countdown: Hari, Jam, Menit, Detik */}
                         <div className="grid grid-cols-4 gap-1.5 text-center font-mono font-black">
                           <div
-                            className={`p-1.5 rounded-xl border ${
+                            className={`py-1.5 px-1 rounded-xl border ${
                               isExpired
                                 ? "bg-white text-rose-800 border-rose-200"
                                 : "bg-white text-[#042E64] border-[#F0DCBE]"
                             }`}
                           >
-                            <div className="text-sm sm:text-base leading-none">
+                            <div className="text-sm font-black leading-none">
                               {String(timeLeft.days).padStart(2, "0")}
                             </div>
                             <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
@@ -413,13 +425,13 @@ export default function MyPackagesPage() {
                           </div>
 
                           <div
-                            className={`p-1.5 rounded-xl border ${
+                            className={`py-1.5 px-1 rounded-xl border ${
                               isExpired
                                 ? "bg-white text-rose-800 border-rose-200"
                                 : "bg-white text-[#042E64] border-[#F0DCBE]"
                             }`}
                           >
-                            <div className="text-sm sm:text-base leading-none">
+                            <div className="text-sm font-black leading-none">
                               {String(timeLeft.hours).padStart(2, "0")}
                             </div>
                             <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
@@ -428,13 +440,13 @@ export default function MyPackagesPage() {
                           </div>
 
                           <div
-                            className={`p-1.5 rounded-xl border ${
+                            className={`py-1.5 px-1 rounded-xl border ${
                               isExpired
                                 ? "bg-white text-rose-800 border-rose-200"
                                 : "bg-white text-[#042E64] border-[#F0DCBE]"
                             }`}
                           >
-                            <div className="text-sm sm:text-base leading-none">
+                            <div className="text-sm font-black leading-none">
                               {String(timeLeft.minutes).padStart(2, "0")}
                             </div>
                             <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
@@ -443,13 +455,13 @@ export default function MyPackagesPage() {
                           </div>
 
                           <div
-                            className={`p-1.5 rounded-xl border ${
+                            className={`py-1.5 px-1 rounded-xl border ${
                               isExpired
                                 ? "bg-white text-rose-800 border-rose-200"
                                 : "bg-white text-[#FB6E09] border-[#FB6E09]/40"
                             }`}
                           >
-                            <div className="text-sm sm:text-base leading-none">
+                            <div className="text-sm font-black leading-none">
                               {String(timeLeft.seconds).padStart(2, "0")}
                             </div>
                             <div className="text-[9px] font-sans font-semibold text-[#042E64]/60 mt-0.5">
@@ -460,26 +472,20 @@ export default function MyPackagesPage() {
                       </div>
                     </div>
 
-                    {/* KETERANGAN NILAI & STATUS KARTU */}
+                    {/* Komponen Perolehan Skor (Nilai) & Status */}
                     <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Award className="w-5 h-5 text-[#FB6E09]" />
-                        <div>
-                          <div className="text-[10px] text-[#042E64]/60 uppercase font-black tracking-wider">
-                            Perolehan Skor
-                          </div>
-                          <div className="text-lg font-black text-[#042E64]">
-                            Nilai: <span className="text-[#FB6E09]">{card.score}</span>
-                          </div>
-                        </div>
+                        <Award className="w-4 h-4 text-[#FB6E09]" />
+                        <span className="text-xs font-bold text-[#042E64]/70">Nilai:</span>
+                        <span className="text-base font-black text-[#FB6E09]">{card.score}</span>
                       </div>
 
                       {isExpired ? (
-                        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-1 rounded-full border border-rose-300">
+                        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
                           ● Paket Hangus
                         </span>
                       ) : (
-                        <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
+                        <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
                           ● {card.status}
                         </span>
                       )}
@@ -489,12 +495,12 @@ export default function MyPackagesPage() {
                   {/* ================================================================= */}
                   {/* TOMBOL AKSI: 'KERJAKAN UJIAN' ATAU 'PAKET HANGUS' (DISABLED)      */}
                   {/* ================================================================= */}
-                  <div className="p-5 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
+                  <div className="p-4 bg-[#FCF4E7]/60 border-t-2 border-[#F0DCBE]">
                     {isExpired ? (
                       <button
                         type="button"
                         disabled
-                        className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-slate-400 bg-slate-200 border-2 border-slate-300 flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-none"
+                        className="w-full py-3 px-4 rounded-xl font-black text-sm text-slate-400 bg-slate-200 border-2 border-slate-300 flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-none"
                         title="Paket sudah tidak dapat dikerjakan karena masa aktif telah habis"
                       >
                         <ShieldAlert className="w-4 h-4 text-slate-400" />
@@ -504,7 +510,7 @@ export default function MyPackagesPage() {
                       <button
                         type="button"
                         onClick={() => handleStartExam(card)}
-                        className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full py-3 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <PlayCircle className="w-4 h-4" />
                         <span>Kerjakan Ujian</span>
