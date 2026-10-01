@@ -106,6 +106,25 @@ export default function MyPackagesPage() {
       }
 
       if (Array.isArray(list) && list.length > 0) {
+        // Ambil data skor tersimpan dari sistem CAT Engine (Logika Skor Tertinggi)
+        let scoresMap: Record<
+          string,
+          {
+            highestScore: number;
+            lastScore: number;
+            status: "Belum Dikerjakan" | "Selesai" | "Hangus";
+          }
+        > = {};
+
+        const rawScores = localStorage.getItem("skb_package_scores");
+        if (rawScores) {
+          try {
+            scoresMap = JSON.parse(rawScores);
+          } catch (e) {
+            scoresMap = {};
+          }
+        }
+
         // =========================================================================
         // LOGIKA PENGERJAAN & TAMPILAN PAKET (APPEND MODE):
         // Setiap transaksi baru DITAMBAHKAN (append) ke dalam daftar, bukan menimpa yang lama.
@@ -148,16 +167,23 @@ export default function MyPackagesPage() {
           if (isBundling) {
             // Pecah menjadi 3 kotak terpisah: Paket 1, Paket 2, Paket 3
             [1, 2, 3].forEach((num) => {
+              const cardId = `${purchase.id}-exam-${num}`;
+              const recorded = scoresMap[cardId];
+              const score = recorded ? recorded.highestScore : 0;
+              const status: "Belum Dikerjakan" | "Selesai" | "Hangus" = recorded
+                ? "Selesai"
+                : "Belum Dikerjakan";
+
               cards.push({
-                cardId: `${purchase.id}-exam-${num}`,
+                cardId,
                 purchaseId: purchase.id,
                 examNumber: num,
                 packageTitle: `Paket ${num}: SKB ${agencyLabel}`,
                 positionTitle: purchase.positionTitle,
                 agencyName: purchase.agencyName,
                 agencyShortName: purchase.agencyShortName,
-                score: 0, // Nilai default 0 sesuai instruksi
-                status: "Belum Dikerjakan",
+                score,
+                status,
                 totalQuestions: 100,
                 durationMinutes: 90,
                 purchasedAt: new Date(purchasedTime).toISOString(),
@@ -175,16 +201,23 @@ export default function MyPackagesPage() {
                 ? 3
                 : purchase.examNumbers[0] || 1;
 
+            const cardId = `${purchase.id}-exam-${num}`;
+            const recorded = scoresMap[cardId];
+            const score = recorded ? recorded.highestScore : 0;
+            const status: "Belum Dikerjakan" | "Selesai" | "Hangus" = recorded
+              ? "Selesai"
+              : "Belum Dikerjakan";
+
             cards.push({
-              cardId: `${purchase.id}-exam-${num}`,
+              cardId,
               purchaseId: purchase.id,
               examNumber: num,
               packageTitle: `Paket ${num}: SKB ${agencyLabel}`,
               positionTitle: purchase.positionTitle,
               agencyName: purchase.agencyName,
               agencyShortName: purchase.agencyShortName,
-              score: 0, // Nilai: 0
-              status: "Belum Dikerjakan",
+              score,
+              status,
               totalQuestions: 100,
               durationMinutes: 90,
               purchasedAt: new Date(purchasedTime).toISOString(),
@@ -480,6 +513,9 @@ export default function MyPackagesPage() {
                         <Award className="w-4 h-4 text-[#FB6E09]" />
                         <span className="text-xs font-bold text-[#042E64]/70">Nilai:</span>
                         <span className="text-base font-black text-[#FB6E09]">{card.score}</span>
+                        {card.score > 0 && (
+                          <span className="text-[10px] text-slate-400 font-bold">/ 500</span>
+                        )}
                       </div>
 
                       {isExpired ? (
@@ -487,7 +523,13 @@ export default function MyPackagesPage() {
                           ● Paket Hangus
                         </span>
                       ) : (
-                        <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                            card.status === "Selesai"
+                              ? "text-emerald-700 bg-emerald-100 border-emerald-300"
+                              : "text-amber-700 bg-amber-100 border-amber-300"
+                          }`}
+                        >
                           ● {card.status}
                         </span>
                       )}
@@ -515,7 +557,7 @@ export default function MyPackagesPage() {
                         className="w-full py-3 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <PlayCircle className="w-4 h-4" />
-                        <span>Kerjakan Ujian</span>
+                        <span>{card.status === "Selesai" ? "Kerjakan Ujian Lagi" : "Kerjakan Ujian"}</span>
                       </button>
                     )}
                   </div>

@@ -28,15 +28,16 @@ import {
 import BrandLogo from "@/components/BrandLogo";
 import { DUMMY_EXAM_QUESTIONS, ExamQuestion } from "@/data/dummyExamQuestions";
 
-// Waktu default ujian: 100 Menit = 6000 Detik (01:40:00)
-const TOTAL_EXAM_SECONDS = 100 * 60;
-const TOTAL_QUESTIONS_COUNT = 110;
+// Waktu default ujian resmi: 90 Menit = 5400 Detik (01:30:00)
+const TOTAL_EXAM_SECONDS = 90 * 60;
+const TOTAL_QUESTIONS_COUNT = 100;
 
 function ExamEngineContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   // Query parameter context jika dibuka dari paket tertentu
+  const cardIdParam = searchParams.get("cardId") || "default-exam-card";
   const packageTitleParam = searchParams.get("packageTitle") || "Paket 1: SKB Formasi";
   const positionParam = searchParams.get("position") || "Petugas Pengelola Barang Bukti";
   const agencyParam = searchParams.get("agency") || "Kejaksaan Republik Indonesia";
@@ -56,7 +57,7 @@ function ExamEngineContent() {
   // State Soal Ragu-ragu: { [questionId: number]: boolean }
   const [doubtfulQuestions, setDoubtfulQuestions] = useState<Record<number, boolean>>({});
 
-  // State Countdown Timer (100 Menit)
+  // State Countdown Timer (90 Menit)
   const [secondsLeft, setSecondsLeft] = useState<number>(TOTAL_EXAM_SECONDS);
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [showFinishModal, setShowFinishModal] = useState<boolean>(false);
@@ -81,7 +82,7 @@ function ExamEngineContent() {
     }
   }, []);
 
-  // Countdown Interval 100 Menit
+  // Countdown Interval 90 Menit (5400 Detik)
   useEffect(() => {
     if (isFinished || secondsLeft <= 0) return;
 
@@ -89,8 +90,6 @@ function ExamEngineContent() {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setIsFinished(true);
-          setShowFinishModal(true);
           return 0;
         }
         return prev - 1;
@@ -100,7 +99,7 @@ function ExamEngineContent() {
     return () => clearInterval(timer);
   }, [isFinished, secondsLeft]);
 
-  // Format Waktu: 01:40:00 (HH:MM:SS)
+  // Format Waktu: 01:30:00 (HH:MM:SS)
   const formattedTime = useMemo(() => {
     const hours = Math.floor(secondsLeft / 3600);
     const minutes = Math.floor((secondsLeft % 3600) / 60);
@@ -168,7 +167,7 @@ function ExamEngineContent() {
     if (currentIndex < TOTAL_QUESTIONS_COUNT - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
-      // Jika di soal terakhir (No. 110), tampilkan konfirmasi selesai
+      // Jika di soal terakhir (No. 100), tampilkan konfirmasi selesai
       setShowFinishModal(true);
     }
   };
@@ -179,11 +178,99 @@ function ExamEngineContent() {
     setShowMobileGrid(false);
   };
 
-  // Handler Selesaikan Ujian
+  // Handler Selesaikan Ujian & Hitung Nilai Otomatis (1 benar = 5 poin, maks 500)
   const handleConfirmFinish = () => {
     setIsFinished(true);
     setShowFinishModal(false);
+
+    // Hitung jawaban benar, salah, dan kosong
+    let correctCount = 0;
+    let wrongCount = 0;
+    let unansweredCount = 0;
+
+    questions.forEach((q) => {
+      const userAns = answers[q.id];
+      if (!userAns) {
+        unansweredCount++;
+      } else if (userAns === q.correctAnswer) {
+        correctCount++;
+      } else {
+        wrongCount++;
+      }
+    });
+
+    const calculatedScore = correctCount * 5; // 1 soal benar bernilai 5 poin, maksimal 500
+
+    if (typeof window !== "undefined") {
+      let existingScores: Record<
+        string,
+        {
+          highestScore: number;
+          lastScore: number;
+          attempts: number;
+          status: string;
+          lastCompletedAt: string;
+        }
+      > = {};
+
+      const rawScores = localStorage.getItem("skb_package_scores");
+      if (rawScores) {
+        try {
+          existingScores = JSON.parse(rawScores);
+        } catch (e) {
+          existingScores = {};
+        }
+      }
+
+      const prevRecord = existingScores[cardIdParam];
+      const previousHighest = prevRecord?.highestScore ?? 0;
+      // LOGIKA SKOR TERTINGGI:
+      // Jika nilai baru lebih tinggi, simpan skor baru. Jika lebih rendah, biarkan nilai tertinggi tetap tampil.
+      const newHighest = Math.max(previousHighest, calculatedScore);
+
+      existingScores[cardIdParam] = {
+        highestScore: newHighest,
+        lastScore: calculatedScore,
+        attempts: (prevRecord?.attempts || 0) + 1,
+        status: "Selesai",
+        lastCompletedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem("skb_package_scores", JSON.stringify(existingScores));
+
+      // Simpan data lengkap hasil ujian terakhir untuk ditampilkan di halaman /exam/result
+      const lastExamResult = {
+        cardId: cardIdParam,
+        packageTitle: packageTitleParam,
+        positionTitle: positionParam,
+        agencyName: agencyParam,
+        score: calculatedScore,
+        highestScore: newHighest,
+        previousHighest,
+        maxScore: 500,
+        totalQuestions: TOTAL_QUESTIONS_COUNT,
+        correctCount,
+        wrongCount,
+        unansweredCount,
+        timeSpentSeconds: TOTAL_EXAM_SECONDS - secondsLeft,
+        completedAt: new Date().toISOString(),
+        userAnswers: answers,
+        doubtfulQuestions,
+      };
+
+      localStorage.setItem("skb_last_exam_result", JSON.stringify(lastExamResult));
+    }
+
+    // Arahkan pengguna ke halaman 'Hasil Ujian'
+    router.push("/exam/result");
   };
+
+  // Otomatis akhiri ujian jika waktu 90 menit habis
+  useEffect(() => {
+    if (secondsLeft === 0 && !isFinished) {
+      handleConfirmFinish();
+    }
+  }, [secondsLeft, isFinished]);
 
   // Status Warna Kotak Navigasi
   const getNavBoxStyle = (questionId: number, index: number) => {
@@ -467,7 +554,7 @@ function ExamEngineContent() {
                 </h3>
               </div>
               <span className="text-xs font-bold text-slate-500">
-                Total: 110 Soal
+                Total: 100 Soal
               </span>
             </div>
 
@@ -602,7 +689,7 @@ function ExamEngineContent() {
             ) : (
               <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Seluruh 110 butir soal telah berhasil Anda jawab dengan lengkap!</span>
+                <span>Seluruh 100 butir soal telah berhasil Anda jawab dengan lengkap!</span>
               </div>
             )}
 
@@ -627,67 +714,6 @@ function ExamEngineContent() {
         </div>
       )}
 
-      {/* Modal Sukses Selesai Ujian */}
-      {isFinished && !showFinishModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 border-2 border-slate-200 shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-xs font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                Simulasi CAT Engine Selesai
-              </span>
-              <h2 className="text-2xl font-black text-[#042E64]">
-                Ujian Berhasil Diselesaikan!
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Jawaban Anda telah terekam di sistem CAT Engine. Poin 2 (Pembuatan Mesin Ujian) telah sukses dieksekusi dengan baik!
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center font-bold">
-              <div>
-                <div className="text-xs text-slate-500">Dijawab</div>
-                <div className="text-xl font-black text-emerald-600">{stats.answeredCount}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">Ragu-ragu</div>
-                <div className="text-xl font-black text-amber-500">{stats.doubtfulCount}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">Kosong</div>
-                <div className="text-xl font-black text-slate-500">{stats.unansweredCount}</div>
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                href="/my-packages"
-                className="w-full sm:w-auto px-6 py-3 rounded-xl font-black text-xs sm:text-sm text-[#042E64] bg-[#FCF4E7] hover:bg-[#F4E3CB] border-2 border-[#F0DCBE] transition-colors"
-              >
-                Kembali ke Daftar Paket
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setAnswers({});
-                  setDoubtfulQuestions({});
-                  setCurrentIndex(0);
-                  setSecondsLeft(TOTAL_EXAM_SECONDS);
-                  setIsFinished(false);
-                }}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl font-black text-xs sm:text-sm text-white bg-[#042E64] hover:bg-[#0B3E84] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <RotateCcw className="w-4 h-4 text-[#FB6E09]" />
-                <span>Ulangi Simulasi (Reset)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ========================================================================= */}
       {/* DRAWER NAVIGASI GRID NOMOR SOAL KHUSUS MOBILE                             */}
       {/* ========================================================================= */}
@@ -699,7 +725,7 @@ function ExamEngineContent() {
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-[#FB6E09]" />
                   <h3 className="text-sm font-black text-[#042E64]">
-                    Nomor Soal (1 - 110)
+                    Nomor Soal (1 - 100)
                   </h3>
                 </div>
                 <button
