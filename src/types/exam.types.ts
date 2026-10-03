@@ -47,6 +47,7 @@ export interface ExamAutosaveSession {
 /** Hasil ujian terakhir (disimpan ke localStorage untuk /exam/result & /pembahasan) */
 export interface LastExamResult {
   cardId: string;
+  packageId?: string;
   packageTitle: string;
   positionTitle: string;
   agencyName: string;
@@ -67,8 +68,9 @@ export interface LastExamResult {
 /** Rekaman skor per kartu paket (skor tertinggi, riwayat) */
 export interface PackageScoreRecord {
   highestScore: number;
-  lastScore: number;
-  attempts: number;
+  lastScore?: number;
+  attemptsCount: number;
+  attempts?: number;
   status: string;
   lastCompletedAt: string;
 }

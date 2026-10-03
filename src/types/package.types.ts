@@ -26,6 +26,8 @@ export interface PurchasedItem {
 /** Kartu paket yang ditampilkan di halaman Daftar Paket */
 export interface ExamCardItem {
   cardId: string;
+  packageId?: string;
+  slug?: string;
   purchaseId: string;
   examNumber: number;
   packageTitle: string;
@@ -33,7 +35,9 @@ export interface ExamCardItem {
   agencyName: string;
   agencyShortName?: string;
   score: number;
+  maxScore?: number;
   status: ExamCardStatus;
+  attemptsCount?: number;
   totalQuestions: number;
   durationMinutes: number;
   purchasedAt: string;

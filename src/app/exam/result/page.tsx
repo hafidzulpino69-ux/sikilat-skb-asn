@@ -62,8 +62,16 @@ function ExamResultContent() {
       router.push("/exam");
       return;
     }
+    const packageId =
+      result.packageId ||
+      (result.cardId.includes("exam-2") || result.packageTitle.includes("Paket 2")
+        ? "paket-2"
+        : result.cardId.includes("exam-3") || result.packageTitle.includes("Paket 3")
+        ? "paket-3"
+        : "paket-1");
+
     router.push(
-      `/exam?cardId=${encodeURIComponent(result.cardId)}&packageTitle=${encodeURIComponent(result.packageTitle)}&position=${encodeURIComponent(result.positionTitle)}&agency=${encodeURIComponent(result.agencyName)}`
+      `/exam?cardId=${encodeURIComponent(result.cardId)}&packageId=${encodeURIComponent(packageId)}&packageTitle=${encodeURIComponent(result.packageTitle)}&position=${encodeURIComponent(result.positionTitle)}&agency=${encodeURIComponent(result.agencyName)}`
     );
   };
 

@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DUMMY_EXAM_QUESTIONS } from "@/data/dummyExamQuestions";
 import { EXAM_DURATION_SECONDS, TOTAL_QUESTIONS } from "@/constants";
 import { useExamTimer, useExamState, useAutosave } from "@/hooks";
-import { calculateScore, loadUserProfile, updatePackageScore, saveLastExamResult } from "@/utils";
+import {
+  calculateScore,
+  loadUserProfile,
+  updatePackageScore,
+  saveLastExamResult,
+  loadPurchasedPackages,
+} from "@/utils";
 import type { FontSizePreference } from "@/types";
 
 import {
@@ -23,10 +29,22 @@ function ExamEngineContent() {
   const searchParams = useSearchParams();
 
   // Query parameter context
-  const cardIdParam = searchParams.get("cardId") || "default-exam-card";
+  const cardIdParam = searchParams.get("cardId") || "";
+  const packageIdParam = searchParams.get("packageId");
   const packageTitleParam = searchParams.get("packageTitle") || "Paket 1: SKB Formasi";
   const positionParam = searchParams.get("position") || "Petugas Pengelola Barang Bukti";
   const agencyParam = searchParams.get("agency") || "Kejaksaan Republik Indonesia";
+
+  // Identifikasi Package ID unik (misal: "paket-1", "paket-2", "paket-3")
+  const currentPackageId =
+    packageIdParam ||
+    (cardIdParam.includes("exam-2") || cardIdParam.includes("paket-2") || packageTitleParam.includes("Paket 2")
+      ? "paket-2"
+      : cardIdParam.includes("exam-3") || cardIdParam.includes("paket-3") || packageTitleParam.includes("Paket 3")
+      ? "paket-3"
+      : "paket-1");
+
+  const effectiveCardId = cardIdParam || currentPackageId;
 
   // Data Peserta
   const [userName, setUserName] = useState("Peserta Simulasi CAT");
@@ -40,7 +58,7 @@ function ExamEngineContent() {
   const questions = DUMMY_EXAM_QUESTIONS;
 
   // =========================================================================
-  // HOOK 1: Autosave & Resume
+  // HOOK 1: Autosave & Resume (terisolasi per paket)
   // =========================================================================
   const {
     isSessionLoaded,
@@ -49,7 +67,7 @@ function ExamEngineContent() {
     restoredSession,
     saveSession,
     clearSession,
-  } = useAutosave({ cardId: cardIdParam });
+  } = useAutosave({ cardId: effectiveCardId });
 
   // =========================================================================
   // HOOK 2: Exam State (Jawaban, Navigasi, Statistik)
@@ -78,6 +96,18 @@ function ExamEngineContent() {
   });
 
   // =========================================================================
+  // HOOK 3: Timer Countdown
+  // =========================================================================
+  const onTimeUpRef = useRef<() => void>(() => {});
+
+  const { secondsLeft, setSecondsLeft, formattedTime, isWarning } = useExamTimer({
+    initialSeconds: restoredSession?.secondsLeft ?? EXAM_DURATION_SECONDS,
+    isFinished,
+    isReady: isSessionLoaded,
+    onTimeUp: () => onTimeUpRef.current(),
+  });
+
+  // =========================================================================
   // HANDLER: Selesaikan Ujian (kalkulasi, simpan skor, clear autosave)
   // =========================================================================
   const handleConfirmFinish = useCallback(() => {
@@ -85,14 +115,21 @@ function ExamEngineContent() {
     setShowFinishModal(false);
 
     const scoreResult = calculateScore(questions, answers);
-    const { highestScore, previousHighest } = updatePackageScore(cardIdParam, scoreResult.score);
 
-    // Hapus autosave session
+    // Update skor HANYA untuk packageId spesifik ini!
+    const { highestScore, previousHighest } = updatePackageScore(
+      currentPackageId,
+      scoreResult.score,
+      cardIdParam || undefined
+    );
+
+    // Hapus autosave session paket ini
     clearSession();
 
     // Simpan hasil ujian untuk /exam/result & /pembahasan
     saveLastExamResult({
-      cardId: cardIdParam,
+      cardId: effectiveCardId,
+      packageId: currentPackageId,
       packageTitle: packageTitleParam,
       positionTitle: positionParam,
       agencyName: agencyParam,
@@ -111,17 +148,25 @@ function ExamEngineContent() {
     });
 
     router.push("/exam/result");
-  }, [questions, answers, doubtfulQuestions, cardIdParam, packageTitleParam, positionParam, agencyParam, clearSession, router]);
+  }, [
+    questions,
+    answers,
+    doubtfulQuestions,
+    currentPackageId,
+    effectiveCardId,
+    cardIdParam,
+    packageTitleParam,
+    positionParam,
+    agencyParam,
+    clearSession,
+    router,
+    secondsLeft,
+  ]);
 
-  // =========================================================================
-  // HOOK 3: Timer Countdown
-  // =========================================================================
-  const { secondsLeft, setSecondsLeft, formattedTime, isWarning } = useExamTimer({
-    initialSeconds: restoredSession?.secondsLeft ?? EXAM_DURATION_SECONDS,
-    isFinished,
-    isReady: isSessionLoaded,
-    onTimeUp: handleConfirmFinish,
-  });
+  // Hubungkan onTimeUpRef ke handleConfirmFinish
+  useEffect(() => {
+    onTimeUpRef.current = handleConfirmFinish;
+  }, [handleConfirmFinish]);
 
   // =========================================================================
   // Profil pengguna

@@ -89,7 +89,9 @@ export function loadLastExamResult(): LastExamResult | null {
 export function loadPackageScores(): PackageScoresMap {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PACKAGE_SCORES);
+    const raw =
+      localStorage.getItem(STORAGE_KEY_PACKAGE_SCORES) ||
+      localStorage.getItem("user_scores");
     if (!raw) return {};
     return JSON.parse(raw) as PackageScoresMap;
   } catch {
@@ -100,29 +102,59 @@ export function loadPackageScores(): PackageScoresMap {
 /** Menyimpan/update skor paket */
 export function savePackageScores(scores: PackageScoresMap): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY_PACKAGE_SCORES, JSON.stringify(scores));
+  try {
+    const serialized = JSON.stringify(scores);
+    localStorage.setItem(STORAGE_KEY_PACKAGE_SCORES, serialized);
+    localStorage.setItem("user_scores", serialized);
+  } catch (e) {
+    console.error("Gagal menyimpan package scores:", e);
+  }
 }
 
-/** Update skor untuk satu paket (dengan logika skor tertinggi) */
+/**
+ * Update skor HANYA untuk satu ID paket spesifik (misal: "paket-1", "paket-2", "paket-3").
+ * Format penyimpanan localStorage berupa Object/Dictionary:
+ * {
+ *   "paket-1": { highestScore: 100, attemptsCount: 1, ... },
+ *   "paket-2": { highestScore: 0, attemptsCount: 0, ... }
+ * }
+ */
 export function updatePackageScore(
-  cardId: string,
-  newScore: number
-): { highestScore: number; previousHighest: number } {
+  packageId: string,
+  newScore: number,
+  cardId?: string
+): { highestScore: number; previousHighest: number; attemptsCount: number } {
   const scores = loadPackageScores();
-  const prev = scores[cardId];
+
+  // Bersihkan key global lama 'default-exam-card' jika ada agar tidak mencemari paket lain
+  if ("default-exam-card" in scores) {
+    delete scores["default-exam-card"];
+  }
+
+  // Ambil record yang sudah ada HANYA untuk packageId ini (atau cardId ini)
+  const prev = scores[packageId] || (cardId ? scores[cardId] : undefined);
   const previousHighest = prev?.highestScore ?? 0;
   const newHighest = Math.max(previousHighest, newScore);
+  const prevAttempts = prev?.attemptsCount ?? prev?.attempts ?? 0;
+  const newAttempts = prevAttempts + 1;
 
-  scores[cardId] = {
+  const record: PackageScoreRecord = {
     highestScore: newHighest,
     lastScore: newScore,
-    attempts: (prev?.attempts || 0) + 1,
+    attemptsCount: newAttempts,
+    attempts: newAttempts,
     status: "Selesai",
     lastCompletedAt: new Date().toISOString(),
   };
 
+  // Simpan secara independen HANYA untuk packageId ini
+  scores[packageId] = record;
+  if (cardId && cardId !== packageId) {
+    scores[cardId] = record;
+  }
+
   savePackageScores(scores);
-  return { highestScore: newHighest, previousHighest };
+  return { highestScore: newHighest, previousHighest, attemptsCount: newAttempts };
 }
 
 // ─── Purchased Packages ──────────────────────────────────────────────────

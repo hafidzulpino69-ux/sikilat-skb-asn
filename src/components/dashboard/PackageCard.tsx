@@ -25,6 +25,9 @@ interface PackageCardProps {
 export default function PackageCard({ card, timeLeft, onStartExam }: PackageCardProps) {
   const isExpired = timeLeft.isExpired;
 
+  const attempts = card.attemptsCount ?? (card.status === "Selesai" ? 1 : 0);
+  const isCompleted = attempts > 0;
+
   return (
     <div
       className={`bg-white rounded-3xl border-3 transition-all flex flex-col justify-between overflow-hidden relative shadow-md hover:shadow-xl ${
@@ -143,7 +146,7 @@ export default function PackageCard({ card, timeLeft, onStartExam }: PackageCard
             className="w-full py-3 px-4 rounded-xl font-black text-sm text-white bg-[#FB6E09] hover:bg-[#E45E00] active:bg-[#C84F00] active:scale-98 transition-all shadow-md shadow-[#FB6E09]/30 flex items-center justify-center gap-2 cursor-pointer"
           >
             <PlayCircle className="w-4 h-4" />
-            <span>{card.status === "Selesai" ? "Kerjakan Ujian Lagi" : "Kerjakan Ujian"}</span>
+            <span>{isCompleted ? "Kerjakan Ujian Lagi" : "Kerjakan Ujian"}</span>
           </button>
         )}
       </div>
@@ -160,30 +163,37 @@ interface ScoreDisplayProps {
 }
 
 export function ScoreDisplay({ card, isExpired }: ScoreDisplayProps) {
+  const attempts = card.attemptsCount ?? (card.status === "Selesai" ? 1 : 0);
+  const isCompleted = attempts > 0;
+
   return (
-    <div className="pt-3 border-t border-[#F0DCBE] flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Award className="w-4 h-4 text-[#FB6E09]" />
-        <span className="text-xs font-bold text-[#042E64]/70">Nilai:</span>
-        <span className="text-base font-black text-[#FB6E09]">{card.score}</span>
+    <div className="pt-3 border-t border-[#F0DCBE] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <Award className="w-4 h-4 text-[#FB6E09] shrink-0" />
+        <span className="text-[11px] sm:text-xs font-bold text-[#042E64]/70 whitespace-nowrap">
+          Nilai Tertinggi:
+        </span>
+        <span className="text-sm sm:text-base font-black text-[#FB6E09]">
+          {card.score || 0}
+        </span>
         {card.score > 0 && (
-          <span className="text-[10px] text-slate-400 font-bold">/ 500</span>
+          <span className="text-[10px] text-slate-400 font-bold">/ {card.maxScore || 500}</span>
         )}
       </div>
 
       {isExpired ? (
-        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
+        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300 whitespace-nowrap">
           ● Paket Hangus
+        </span>
+      ) : isCompleted ? (
+        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-emerald-700 bg-emerald-100 border-emerald-300 whitespace-nowrap">
+          ● Sudah Dikerjakan {attempts} Kali
         </span>
       ) : (
         <span
-          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-            card.status === "Selesai"
-              ? "text-emerald-700 bg-emerald-100 border-emerald-300"
-              : "text-amber-700 bg-amber-100 border-amber-300"
-          }`}
+          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-amber-700 bg-amber-100 border-amber-300 whitespace-nowrap"
         >
-          ● {card.status}
+          ● Belum Dikerjakan
         </span>
       )}
     </div>
