@@ -461,11 +461,13 @@ function ExamEngineContent() {
   // NAVIGATION GUARD: Cegah Tombol Back Browser & Buka ExitWarningModal
   // =========================================================================
   useEffect(() => {
-    // 1. Saat komponen pertama kali di-load (mount), LANGSUNG dorong state palsu
+    // 1. Kunci tumpukan riwayat (history stack) dengan kombinasi replaceState lalu pushState
+    // Menjamin halaman saat ini menjadi jebakan yang valid bahkan setelah browser di-refresh/reload
+    window.history.replaceState(null, "", window.location.href);
     window.history.pushState(null, "", window.location.href);
 
     const handlePopState = () => {
-      // 2. Jika !isFinished, langsung tahan user agar tidak pindah halaman dengan mendorong state lagi
+      // 2. Jika !isFinished, selalu pasang ulang jebakan dengan pushState lagi sebelum menampilkan modal
       if (!isFinishedRef.current) {
         window.history.pushState(null, "", window.location.href);
         setShowExitWarningModal(true);
