@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import LoadingState from "@/components/LoadingState";
+import { RepurchaseWarningModal } from "@/components/payment";
 import { supabase } from "@/utils/supabaseClient";
 
 interface PendingOrder {
@@ -44,6 +45,8 @@ export default function PaymentPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [userName, setUserName] = useState("Peserta SIKILAT");
   const [userEmail, setUserEmail] = useState("peserta@example.com");
+  const [showRepurchaseModal, setShowRepurchaseModal] = useState(false);
+  const [repurchasePackageIds, setRepurchasePackageIds] = useState<string[]>([]);
 
   const [invoiceNumber] = useState(() => {
     const randomCode = Math.floor(1000 + Math.random() * 9000);
@@ -118,6 +121,120 @@ export default function PaymentPage() {
     return { message: String(error) };
   };
 
+  // Helper standarisasi penanganan error pembayaran
+  const handlePaymentError = (err: unknown) => {
+    console.error(
+      "Detail Error:",
+      JSON.stringify(formatErrorDetail(err), null, 2)
+    );
+    const formatted = formatErrorDetail(err);
+    const rawMsg =
+      (formatted.message as string) ||
+      (err instanceof Error ? err.message : "");
+
+    let userFriendlyMessage =
+      "Gagal memproses pembayaran paket. Silakan periksa koneksi atau coba beberapa saat lagi.";
+    if (rawMsg.includes("Sesi login") || rawMsg.includes("login kembali")) {
+      userFriendlyMessage = rawMsg;
+    } else if (
+      rawMsg.toLowerCase().includes("network") ||
+      rawMsg.toLowerCase().includes("koneksi") ||
+      rawMsg.toLowerCase().includes("fetch")
+    ) {
+      userFriendlyMessage =
+        "Koneksi internet bermasalah. Periksa jaringan Anda dan coba lagi.";
+    }
+    setPaymentError(userFriendlyMessage);
+    setIsProcessing(false);
+  };
+
+  // ─── MESIN PEMBAYARAN UTAMA (UPSERT KE DB) ──────────────────────────────
+  const executePaymentUpsert = async (user: { id: string }) => {
+    if (!order) return;
+
+    const examNums =
+      order.examNumbers && order.examNumbers.length > 0
+        ? order.examNumbers
+        : [1];
+
+    const positionSlug = (order.positionId || order.positionTitle)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    const agencyShort =
+      order.agencyShortName || order.agencyName || "Instansi";
+
+    // 2. Tentukan masa aktif berdasarkan jenis paket (WAJIB NOT NULL di DB)
+    const validityDays = order.packageKey === "bundling" ? 150 : 90;
+    const expiresAt = new Date(
+      Date.now() + validityDays * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    // 3. Untuk setiap nomor paket, pastikan master di packages ada & simpan akses di user_packages
+    for (const num of examNums) {
+      const masterSlug = `${positionSlug}-paket-${num}`;
+
+      // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
+      const { data: pkgData, error: pkgError } = await supabase
+        .from("packages")
+        .upsert(
+          {
+            slug: masterSlug,
+            title: `Paket ${num}: SKB ${agencyShort}`,
+            agency_name: order.agencyName,
+            position_title: order.positionTitle,
+            package_number: num,
+            total_questions: 100,
+            duration_minutes: 90,
+            max_score: 500,
+            is_active: true,
+          },
+          { onConflict: "slug" }
+        )
+        .select("id")
+        .single();
+
+      if (pkgError || !pkgData) {
+        console.error(
+          "Detail Error:",
+          JSON.stringify(formatErrorDetail(pkgError), null, 2)
+        );
+        throw pkgError || new Error("Gagal mendaftarkan master paket.");
+      }
+
+      // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT
+      const { error: userPkgError } = await supabase
+        .from("user_packages")
+        .upsert(
+          {
+            user_id: user.id,
+            package_id: pkgData.id,
+            expires_at: expiresAt,
+            purchased_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id, package_id" }
+        );
+
+      if (userPkgError) {
+        console.error(
+          "Detail Error:",
+          JSON.stringify(formatErrorDetail(userPkgError), null, 2)
+        );
+        throw userPkgError;
+      }
+    }
+
+    // Bersihkan pending order setelah berhasil
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("skb_pending_order");
+    }
+
+    // Arahkan ke halaman Daftar Paket Anda dengan flag sukses
+    router.push("/my-packages?purchased=1");
+  };
+
+  // ─── PENCEGAT: Validasi Kepemilikan Paket Sebelum Membayar ────────────────
   const handlePayNow = async () => {
     if (!order || isProcessing) return;
     setIsProcessing(true);
@@ -146,100 +263,89 @@ export default function PaymentPage() {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
 
-      const agencyShort =
-        order.agencyShortName || order.agencyName || "Instansi";
+      // Cek apakah master packages untuk paket ini sudah pernah dibuat
+      const targetSlugs = examNums.map((num) => `${positionSlug}-paket-${num}`);
+      const { data: matchedPackages, error: matchError } = await supabase
+        .from("packages")
+        .select("id, slug")
+        .in("slug", targetSlugs);
 
-      // 2. Tentukan masa aktif berdasarkan jenis paket (WAJIB NOT NULL di DB)
-      const validityDays = order.packageKey === "bundling" ? 150 : 90;
-      const expiresAt = new Date(
-        Date.now() + validityDays * 24 * 60 * 60 * 1000
-      ).toISOString();
+      if (matchError) {
+        console.warn("Peringatan pengecekan katalog paket:", matchError);
+      }
 
-      // 3. Untuk setiap nomor paket, pastikan master di packages ada & simpan akses di user_packages
-      for (const num of examNums) {
-        const masterSlug = `${positionSlug}-paket-${num}`;
-
-        // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
-        const { data: pkgData, error: pkgError } = await supabase
-          .from("packages")
-          .upsert(
-            {
-              slug: masterSlug,
-              title: `Paket ${num}: SKB ${agencyShort}`,
-              agency_name: order.agencyName,
-              position_title: order.positionTitle,
-              package_number: num,
-              total_questions: 100,
-              duration_minutes: 90,
-              max_score: 500,
-              is_active: true,
-            },
-            { onConflict: "slug" }
-          )
-          .select("id")
-          .single();
-
-        if (pkgError || !pkgData) {
-          console.error(
-            "Detail Error:",
-            JSON.stringify(formatErrorDetail(pkgError), null, 2)
-          );
-          throw pkgError || new Error("Gagal mendaftarkan master paket.");
-        }
-
-        // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT
-        const { error: userPkgError } = await supabase
+      // Jika ada paket master yang cocok, cek ke user_packages untuk user ini
+      if (matchedPackages && matchedPackages.length > 0) {
+        const candidatePkgIds = matchedPackages.map((p) => p.id);
+        const { data: ownedList, error: ownedError } = await supabase
           .from("user_packages")
-          .upsert(
-            {
-              user_id: user.id,
-              package_id: pkgData.id,
-              expires_at: expiresAt,
-              purchased_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id, package_id" }
-          );
+          .select("package_id")
+          .eq("user_id", user.id)
+          .in("package_id", candidatePkgIds);
 
-        if (userPkgError) {
-          console.error(
-            "Detail Error:",
-            JSON.stringify(formatErrorDetail(userPkgError), null, 2)
-          );
-          throw userPkgError;
+        if (ownedError) {
+          console.warn("Peringatan pengecekan user_packages:", ownedError);
+        }
+
+        if (ownedList && ownedList.length > 0) {
+          // PAKET SUDAH DIMILIKI -> Tampilkan RepurchaseWarningModal
+          setRepurchasePackageIds(ownedList.map((item) => item.package_id));
+          setShowRepurchaseModal(true);
+          setIsProcessing(false);
+          return;
         }
       }
 
-      // Bersihkan pending order setelah berhasil
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("skb_pending_order");
-      }
-
-      // Arahkan ke halaman Daftar Paket Anda dengan flag sukses
-      router.push("/my-packages?purchased=1");
+      // JIKA PAKET BELUM DIMILIKI: Langsung eksekusi fungsi pembayaran (Upsert) seperti biasa
+      await executePaymentUpsert(user);
     } catch (err: unknown) {
-      console.error(
-        "Detail Error:",
-        JSON.stringify(formatErrorDetail(err), null, 2)
-      );
-      const formatted = formatErrorDetail(err);
-      const rawMsg =
-        (formatted.message as string) ||
-        (err instanceof Error ? err.message : "");
+      handlePaymentError(err);
+    }
+  };
 
-      let userFriendlyMessage =
-        "Gagal memproses pembayaran paket. Silakan periksa koneksi atau coba beberapa saat lagi.";
-      if (rawMsg.includes("Sesi login") || rawMsg.includes("login kembali")) {
-        userFriendlyMessage = rawMsg;
-      } else if (
-        rawMsg.toLowerCase().includes("network") ||
-        rawMsg.toLowerCase().includes("koneksi") ||
-        rawMsg.toLowerCase().includes("fetch")
-      ) {
-        userFriendlyMessage =
-          "Koneksi internet bermasalah. Periksa jaringan Anda dan coba lagi.";
+  // ─── KONFIRMASI BELI ULANG: Reset Progres Ujian Lalu Lanjutkan Pembayaran ─
+  const handleConfirmRepurchase = async () => {
+    if (!order || isProcessing) return;
+    setIsProcessing(true);
+    setPaymentError(null);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error(
+          "Sesi login Anda tidak ditemukan atau telah berakhir. Silakan login kembali untuk menyelesaikan transaksi."
+        );
       }
-      setPaymentError(userFriendlyMessage);
-      setIsProcessing(false);
+
+      // RESET PROGRES: Lakukan fungsi DELETE pada tabel exam_results
+      if (repurchasePackageIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("exam_results")
+          .delete()
+          .eq("user_id", user.id)
+          .in("package_id", repurchasePackageIds);
+
+        if (deleteError) {
+          console.warn("Catatan reset exam_results:", deleteError);
+        }
+
+        // Hapus cache autosave lokal jika ada
+        if (typeof window !== "undefined") {
+          repurchasePackageIds.forEach((pkgId) => {
+            localStorage.removeItem(`skb_exam_session_${pkgId}`);
+          });
+        }
+      }
+
+      // LALU lanjutkan ke fungsi pembayaran (Upsert)
+      await executePaymentUpsert(user);
+      setShowRepurchaseModal(false);
+    } catch (err: unknown) {
+      handlePaymentError(err);
     }
   };
 
@@ -486,6 +592,19 @@ export default function PaymentPage() {
           </div>
         </div>
       </main>
+
+      {/* MODAL PERINGATAN BELI ULANG (REPURCHASE & RESET) */}
+      {showRepurchaseModal && (
+        <RepurchaseWarningModal
+          packageName={order?.packageName}
+          isProcessing={isProcessing}
+          onCancel={() => {
+            setShowRepurchaseModal(false);
+            setIsProcessing(false);
+          }}
+          onConfirm={handleConfirmRepurchase}
+        />
+      )}
     </div>
   );
 }

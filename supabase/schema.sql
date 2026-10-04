@@ -115,6 +115,9 @@ create policy "exam_results_insert_own" on public.exam_results for insert to aut
 drop policy if exists "exam_results_update_own" on public.exam_results;
 create policy "exam_results_update_own" on public.exam_results for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "exam_results_delete_own" on public.exam_results;
+create policy "exam_results_delete_own" on public.exam_results for delete to authenticated using (auth.uid() = user_id);
+
 -- 6. PAKSA POSTGREST ME-RELOAD SCHEMA CACHE SECARA INSTAN!
 notify pgrst, 'reload schema';
 
