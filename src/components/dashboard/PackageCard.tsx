@@ -13,6 +13,7 @@ import {
   Sparkles,
   Clock,
   ShieldAlert,
+  History,
 } from "lucide-react";
 import type { ExamCardItem, TimeLeftResult } from "@/types";
 
@@ -165,37 +166,67 @@ interface ScoreDisplayProps {
 export function ScoreDisplay({ card, isExpired }: ScoreDisplayProps) {
   const attempts = card.attemptsCount ?? (card.status === "Selesai" ? 1 : 0);
   const isCompleted = attempts > 0;
+  const highestScore = card.score || 0;
 
   return (
-    <div className="pt-3 border-t border-[#F0DCBE] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <Award className="w-4 h-4 text-[#FB6E09] shrink-0" />
-        <span className="text-[11px] sm:text-xs font-bold text-[#042E64]/70 whitespace-nowrap">
-          Nilai Tertinggi:
-        </span>
-        <span className="text-sm sm:text-base font-black text-[#FB6E09]">
-          {card.score || 0}
-        </span>
-        {card.score > 0 && (
-          <span className="text-[10px] text-slate-400 font-bold">/ {card.maxScore || 500}</span>
-        )}
+    <div className="pt-3 border-t border-[#F0DCBE] space-y-2.5">
+      {/* Kartu Ringkasan: Nilai Tertinggi & Frekuensi Pengerjaan */}
+      <div className="grid grid-cols-2 gap-2 bg-[#FCF4E7]/60 p-2.5 rounded-2xl border border-[#F0DCBE]">
+        {/* Kolom 1: Nilai Tertinggi */}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+            <Award className="w-4 h-4 text-[#FB6E09]" />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-[#042E64]/70 uppercase tracking-wider leading-none">
+              Nilai Tertinggi
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-base font-black text-[#FB6E09] leading-none">
+                {highestScore}
+              </span>
+              <span className="text-[10px] font-bold text-slate-400">
+                / {card.maxScore || 500}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Kolom 2: Jumlah Pengerjaan (Attempts) */}
+        <div className="flex items-center gap-2 border-l border-[#F0DCBE] pl-2.5">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+            <History className="w-4 h-4 text-[#042E64]" />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-[#042E64]/70 uppercase tracking-wider leading-none">
+              Pengerjaan
+            </div>
+            <div className="text-xs font-black text-[#042E64] mt-1 leading-none">
+              {attempts > 0 ? `${attempts}x Ujian` : "Belum Ujian"}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {isExpired ? (
-        <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300 whitespace-nowrap">
-          ● Paket Hangus
+      {/* Baris Status Badge */}
+      <div className="flex items-center justify-between text-xs px-0.5">
+        <span className="text-[11px] font-bold text-[#042E64]/60">
+          Status Ujian:
         </span>
-      ) : isCompleted ? (
-        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-emerald-700 bg-emerald-100 border-emerald-300 whitespace-nowrap">
-          ● Sudah Dikerjakan {attempts} Kali
-        </span>
-      ) : (
-        <span
-          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-amber-700 bg-amber-100 border-amber-300 whitespace-nowrap"
-        >
-          ● Belum Dikerjakan
-        </span>
-      )}
+        {isExpired ? (
+          <span className="text-[11px] font-black text-rose-800 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300 whitespace-nowrap">
+            ● Paket Hangus
+          </span>
+        ) : isCompleted ? (
+          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-emerald-700 bg-emerald-100 border-emerald-300 whitespace-nowrap">
+            ● Selesai Dikerjakan ({attempts} Kali)
+          </span>
+        ) : (
+          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border text-amber-700 bg-amber-100 border-amber-300 whitespace-nowrap">
+            ● Belum Dikerjakan
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -68,13 +68,15 @@ select
   up.package_id,
   p.slug, 
   p.title, 
-  coalesce(max(case when r.is_finished = true then r.score else 0 end), 0)::smallint as highest_score, 
-  count(case when r.is_finished = true then r.id else null end)::integer as attempts_count, 
-  max(case when r.is_finished = true then r.completed_at else null end) as last_completed_at 
+  coalesce(max(case when r.is_finished = true or (r.is_finished is null and r.score > 0) then r.score else 0 end), 0)::smallint as highest_score, 
+  count(case when r.is_finished = true or (r.is_finished is null and r.score > 0) then r.id else null end)::integer as attempts_count, 
+  max(case when r.is_finished = true or (r.is_finished is null and r.score > 0) then r.completed_at else null end) as last_completed_at 
 from public.user_packages up
 join public.packages p on p.id = up.package_id
 left join public.exam_results r on r.package_id = up.package_id and r.user_id = up.user_id
 group by up.user_id, up.package_id, p.slug, p.title;
+
+grant select on public.package_score_summary to anon, authenticated;
 
 -- 5. ROW LEVEL SECURITY (RLS) POLICIES
 alter table public.packages enable row level security;

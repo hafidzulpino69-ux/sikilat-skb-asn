@@ -39,6 +39,7 @@ export interface ExamCardItem {
   maxScore?: number;
   status: ExamCardStatus;
   attemptsCount?: number;
+  lastCompletedAt?: string;
   totalQuestions: number;
   durationMinutes: number;
   purchasedAt: string;

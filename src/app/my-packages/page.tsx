@@ -22,7 +22,7 @@ import {
   TOTAL_QUESTIONS,
   EXAM_DURATION_MINUTES,
 } from "@/constants";
-import { getAgencyShortName, calculateTimeLeft } from "@/utils";
+import { getAgencyShortName, calculateTimeLeft, loadPackageScores } from "@/utils";
 
 export default function MyPackagesPage() {
   const router = useRouter();
@@ -89,7 +89,7 @@ export default function MyPackagesPage() {
         }
       }
 
-      // 3. Ambil ringkasan skor & jumlah pengerjaan dari view package_score_summary milik user
+      // 3a. Ambil ringkasan skor & jumlah pengerjaan dari view package_score_summary milik user (VIEW Fase 2)
       const { data: summaryData, error: summaryError } = await supabase
         .from("package_score_summary")
         .select("*")
@@ -99,27 +99,103 @@ export default function MyPackagesPage() {
         console.warn("Peringatan membaca package_score_summary:", summaryError);
       }
 
-      // 4. Petakan ringkasan skor berdasarkan package_id
+      // 3b. Query cadangan langsung dari tabel exam_results milik user (antisipasi jika view belum sync atau RLS view)
+      const { data: examResultsData } = await supabase
+        .from("exam_results")
+        .select("package_id, score, is_finished, completed_at")
+        .eq("user_id", user.id);
+
+      // 4. Petakan ringkasan skor komprehensif (View + Backup Exam Results + LocalStorage)
       const summaryMap = new Map<
         string,
-        { highest_score: number; attempts_count: number }
+        { highest_score: number; attempts_count: number; last_completed_at?: string }
       >();
 
-      if (summaryData) {
+      const setSummary = (
+        key: string,
+        score: number,
+        attempts: number,
+        completedAt?: string
+      ) => {
+        if (!key) return;
+        const existing = summaryMap.get(key);
+        const newHighest = Math.max(existing?.highest_score || 0, score || 0);
+        const newAttempts = Math.max(existing?.attempts_count || 0, attempts || 0);
+        const latestTime =
+          completedAt &&
+          (!existing?.last_completed_at || new Date(completedAt) > new Date(existing.last_completed_at))
+            ? completedAt
+            : existing?.last_completed_at;
+
+        summaryMap.set(key, {
+          highest_score: newHighest,
+          attempts_count: newAttempts,
+          last_completed_at: latestTime,
+        });
+      };
+
+      // 4a. Masukkan data dari package_score_summary
+      if (summaryData && Array.isArray(summaryData)) {
         summaryData.forEach((row: any) => {
-          summaryMap.set(row.package_id, {
-            highest_score: Number(row.highest_score) || 0,
-            attempts_count: Number(row.attempts_count) || 0,
-          });
+          const score = Number(row.highest_score) || 0;
+          const attempts = Number(row.attempts_count) || 0;
+          if (row.package_id) setSummary(row.package_id, score, attempts, row.last_completed_at);
+          if (row.slug) setSummary(row.slug, score, attempts, row.last_completed_at);
+          if (row.title) setSummary(row.title, score, attempts, row.last_completed_at);
+        });
+      }
+
+      // 4b. Agregasi langsung dari tabel exam_results (jika view belum me-reload hasil terbaru)
+      if (examResultsData && Array.isArray(examResultsData) && examResultsData.length > 0) {
+        const directStats: Record<string, { highest: number; count: number; lastAt?: string }> = {};
+
+        examResultsData.forEach((r: any) => {
+          const pId = r.package_id;
+          if (!pId) return;
+          const isDone = r.is_finished === true || (r.score && Number(r.score) > 0);
+          if (!isDone) return;
+
+          if (!directStats[pId]) {
+            directStats[pId] = { highest: 0, count: 0, lastAt: r.completed_at };
+          }
+          directStats[pId].highest = Math.max(directStats[pId].highest, Number(r.score) || 0);
+          directStats[pId].count += 1;
+          if (
+            r.completed_at &&
+            (!directStats[pId].lastAt || new Date(r.completed_at) > new Date(directStats[pId].lastAt!))
+          ) {
+            directStats[pId].lastAt = r.completed_at;
+          }
+        });
+
+        Object.entries(directStats).forEach(([pId, stat]) => {
+          setSummary(pId, stat.highest, stat.count, stat.lastAt);
+        });
+      }
+
+      // 4c. Gabungkan dengan skor di localStorage jika pernah melakukan latihan mandiri
+      const localScores = loadPackageScores();
+      if (localScores && typeof localScores === "object") {
+        Object.entries(localScores).forEach(([k, rec]: [string, any]) => {
+          const score = Number(rec.highestScore || rec.score) || 0;
+          const attempts =
+            Number(rec.attemptsCount || rec.attempts) || (rec.status === "Selesai" ? 1 : 0);
+          setSummary(k, score, attempts, rec.lastCompletedAt);
         });
       }
 
       // 5. Transformasi data paket Supabase ke model UI ExamCardItem
       const cards: ExamCardItem[] = finalCardsData.map((pkg: any) => {
-        const summary = summaryMap.get(pkg.id) || {
-          highest_score: 0,
-          attempts_count: 0,
-        };
+        const summary =
+          summaryMap.get(pkg.id) ||
+          summaryMap.get(pkg.slug) ||
+          summaryMap.get(pkg.user_package_id) ||
+          summaryMap.get(pkg.title) || {
+            highest_score: 0,
+            attempts_count: 0,
+            last_completed_at: undefined,
+          };
+
         const attemptsCount = summary.attempts_count;
         const score = summary.highest_score;
         const status: ExamCardStatus =
@@ -151,6 +227,7 @@ export default function MyPackagesPage() {
           maxScore: pkg.max_score || 500,
           status,
           attemptsCount,
+          lastCompletedAt: summary.last_completed_at,
           totalQuestions: pkg.total_questions || TOTAL_QUESTIONS,
           durationMinutes: pkg.duration_minutes || EXAM_DURATION_MINUTES,
           purchasedAt: new Date(purchasedTime).toISOString(),
