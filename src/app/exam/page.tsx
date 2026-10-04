@@ -21,6 +21,7 @@ import {
   FinishModal,
   MobileGridDrawer,
   ResumeBanner,
+  ExitWarningModal,
 } from "@/components/exam";
 import LoadingState from "@/components/LoadingState";
 
@@ -56,7 +57,9 @@ function ExamEngineContent() {
 
   // UI State
   const [isFinished, setIsFinished] = useState(false);
+  const isFinishedRef = useRef(false);
   const [showFinishModal, setShowFinishModal] = useState(false);
+  const [showExitWarningModal, setShowExitWarningModal] = useState(false);
   const [showMobileGrid, setShowMobileGrid] = useState(false);
   const [fontSize, setFontSize] = useState<FontSizePreference>("normal");
 
@@ -305,141 +308,197 @@ function ExamEngineContent() {
   // =========================================================================
   // HANDLER: Selesaikan Ujian (Finalisasi status is_finished = true di Supabase)
   // =========================================================================
-  const handleConfirmFinish = useCallback(async () => {
-    try {
-      setIsSubmitting(true);
+  const handleConfirmFinish = useCallback(
+    async (redirectTo: string = "/exam/result") => {
+      try {
+        setIsSubmitting(true);
 
-      const scoreResult = calculateScore(questions, answers);
-      const timeSpentSeconds = Math.max(0, EXAM_DURATION_SECONDS - secondsLeft);
-      const targetUuid = resolvedPackageUuid;
+        const scoreResult = calculateScore(questions, answers);
+        const timeSpentSeconds = Math.max(0, EXAM_DURATION_SECONDS - secondsLeft);
+        const targetUuid = resolvedPackageUuid;
 
-      let highestScore = scoreResult.score;
-      let previousHighest = 0;
+        let highestScore = scoreResult.score;
+        let previousHighest = 0;
 
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
 
-      if (targetUuid && currentUser) {
-        // 1. Ambil rekap skor paket sebelumnya dari view package_score_summary
-        const { data: prevSummary } = await supabase
-          .from("package_score_summary")
-          .select("highest_score")
-          .eq("package_id", targetUuid)
-          .eq("user_id", currentUser.id)
-          .maybeSingle();
+        if (targetUuid && currentUser) {
+          // 1. Ambil rekap skor paket sebelumnya dari view package_score_summary
+          const { data: prevSummary } = await supabase
+            .from("package_score_summary")
+            .select("highest_score")
+            .eq("package_id", targetUuid)
+            .eq("user_id", currentUser.id)
+            .maybeSingle();
 
-        if (prevSummary) {
-          previousHighest = Number(prevSummary.highest_score) || 0;
-        }
-
-        // 2. Finalisasi baris sesi ujian aktif di tabel exam_results Supabase
-        if (activeResultId) {
-          const { error: updateError } = await supabase
-            .from("exam_results")
-            .update({
-              score: scoreResult.score,
-              correct_count: scoreResult.correctCount,
-              wrong_count: scoreResult.wrongCount,
-              unanswered_count: scoreResult.unansweredCount,
-              time_spent_seconds: timeSpentSeconds,
-              seconds_left: 0,
-              user_answers: answers,
-              doubtful_answers: doubtfulQuestions,
-              is_finished: true,
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", activeResultId);
-
-          if (updateError) {
-            console.error("Gagal finalisasi hasil ujian di Supabase:", updateError);
+          if (prevSummary) {
+            previousHighest = Number(prevSummary.highest_score) || 0;
           }
-        } else {
-          // Fallback jika activeResultId tidak ada
-          await supabase.from("exam_results").insert([
-            {
-              package_id: targetUuid,
-              user_id: currentUser.id,
-              score: scoreResult.score,
-              correct_count: scoreResult.correctCount,
-              wrong_count: scoreResult.wrongCount,
-              unanswered_count: scoreResult.unansweredCount,
-              time_spent_seconds: timeSpentSeconds,
-              seconds_left: 0,
-              user_answers: answers,
-              doubtful_answers: doubtfulQuestions,
-              is_finished: true,
-              completed_at: new Date().toISOString(),
-            },
-          ]);
+
+          // 2. Finalisasi baris sesi ujian aktif di tabel exam_results Supabase
+          if (activeResultId) {
+            const { error: updateError } = await supabase
+              .from("exam_results")
+              .update({
+                score: scoreResult.score,
+                correct_count: scoreResult.correctCount,
+                wrong_count: scoreResult.wrongCount,
+                unanswered_count: scoreResult.unansweredCount,
+                time_spent_seconds: timeSpentSeconds,
+                seconds_left: 0,
+                user_answers: answers,
+                doubtful_answers: doubtfulQuestions,
+                is_finished: true,
+                completed_at: new Date().toISOString(),
+              })
+              .eq("id", activeResultId);
+
+            if (updateError) {
+              console.error("Gagal finalisasi hasil ujian di Supabase:", updateError);
+            }
+          } else {
+            // Fallback jika activeResultId tidak ada
+            await supabase.from("exam_results").insert([
+              {
+                package_id: targetUuid,
+                user_id: currentUser.id,
+                score: scoreResult.score,
+                correct_count: scoreResult.correctCount,
+                wrong_count: scoreResult.wrongCount,
+                unanswered_count: scoreResult.unansweredCount,
+                time_spent_seconds: timeSpentSeconds,
+                seconds_left: 0,
+                user_answers: answers,
+                doubtful_answers: doubtfulQuestions,
+                is_finished: true,
+                completed_at: new Date().toISOString(),
+              },
+            ]);
+          }
+
+          // 3. Ambil ringkasan nilai tertinggi terbaru yang teragregasi di view
+          const { data: updatedSummary } = await supabase
+            .from("package_score_summary")
+            .select("highest_score")
+            .eq("package_id", targetUuid)
+            .eq("user_id", currentUser.id)
+            .maybeSingle();
+
+          if (updatedSummary) {
+            highestScore = Number(updatedSummary.highest_score) || scoreResult.score;
+          }
         }
 
-        // 3. Ambil ringkasan nilai tertinggi terbaru yang teragregasi di view
-        const { data: updatedSummary } = await supabase
-          .from("package_score_summary")
-          .select("highest_score")
-          .eq("package_id", targetUuid)
-          .eq("user_id", currentUser.id)
-          .maybeSingle();
+        // Hapus autosave session lokal paket ini
+        clearSession();
 
-        if (updatedSummary) {
-          highestScore = Number(updatedSummary.highest_score) || scoreResult.score;
-        }
+        // Simpan rekap ujian untuk halaman /exam/result & /pembahasan
+        saveLastExamResult({
+          cardId: targetUuid || effectiveCardId,
+          packageId: targetUuid || effectiveCardId,
+          packageTitle: packageTitleParam,
+          positionTitle: positionParam,
+          agencyName: agencyParam,
+          score: scoreResult.score,
+          highestScore: Math.max(highestScore, scoreResult.score),
+          previousHighest,
+          maxScore: scoreResult.maxScore,
+          totalQuestions: TOTAL_QUESTIONS,
+          correctCount: scoreResult.correctCount,
+          wrongCount: scoreResult.wrongCount,
+          unansweredCount: scoreResult.unansweredCount,
+          timeSpentSeconds,
+          completedAt: new Date().toISOString(),
+          userAnswers: answers,
+          doubtfulQuestions,
+        });
+
+        setIsFinished(true);
+        isFinishedRef.current = true;
+        setShowFinishModal(false);
+        setShowExitWarningModal(false);
+        router.push(redirectTo);
+      } catch (err) {
+        console.error("Terjadi kesalahan saat menyimpan hasil ujian:", err);
+        setIsFinished(true);
+        isFinishedRef.current = true;
+        setShowFinishModal(false);
+        setShowExitWarningModal(false);
+        router.push(redirectTo);
+      } finally {
+        setIsSubmitting(false);
       }
+    },
+    [
+      questions,
+      answers,
+      doubtfulQuestions,
+      resolvedPackageUuid,
+      effectiveCardId,
+      packageTitleParam,
+      positionParam,
+      agencyParam,
+      activeResultId,
+      clearSession,
+      router,
+      secondsLeft,
+    ]
+  );
 
-      // Hapus autosave session lokal paket ini
-      clearSession();
+  // Handler keluar dari pop-up peringatan navigasi (redirect ke /my-packages)
+  const handleConfirmExit = useCallback(() => {
+    void handleConfirmFinish("/my-packages");
+  }, [handleConfirmFinish]);
 
-      // Simpan rekap ujian untuk halaman /exam/result & /pembahasan
-      saveLastExamResult({
-        cardId: targetUuid || effectiveCardId,
-        packageId: targetUuid || effectiveCardId,
-        packageTitle: packageTitleParam,
-        positionTitle: positionParam,
-        agencyName: agencyParam,
-        score: scoreResult.score,
-        highestScore: Math.max(highestScore, scoreResult.score),
-        previousHighest,
-        maxScore: scoreResult.maxScore,
-        totalQuestions: TOTAL_QUESTIONS,
-        correctCount: scoreResult.correctCount,
-        wrongCount: scoreResult.wrongCount,
-        unansweredCount: scoreResult.unansweredCount,
-        timeSpentSeconds,
-        completedAt: new Date().toISOString(),
-        userAnswers: answers,
-        doubtfulQuestions,
-      });
+  // Sinkronisasi status selesai ke ref agar selalu segar di event listener
+  useEffect(() => {
+    isFinishedRef.current = isFinished;
+  }, [isFinished]);
 
-      setIsFinished(true);
-      setShowFinishModal(false);
-      router.push("/exam/result");
-    } catch (err) {
-      console.error("Terjadi kesalahan saat menyimpan hasil ujian:", err);
-      setIsFinished(true);
-      setShowFinishModal(false);
-      router.push("/exam/result");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [
-    questions,
-    answers,
-    doubtfulQuestions,
-    resolvedPackageUuid,
-    effectiveCardId,
-    packageTitleParam,
-    positionParam,
-    agencyParam,
-    activeResultId,
-    clearSession,
-    router,
-    secondsLeft,
-  ]);
+  // =========================================================================
+  // NAVIGATION GUARD: Cegah Tombol Back Browser & Buka ExitWarningModal
+  // =========================================================================
+  useEffect(() => {
+    // 1. Saat komponen pertama kali di-load (mount), LANGSUNG dorong state palsu
+    window.history.pushState(null, "", window.location.href);
+
+    const handlePopState = () => {
+      // 2. Jika !isFinished, langsung tahan user agar tidak pindah halaman dengan mendorong state lagi
+      if (!isFinishedRef.current) {
+        window.history.pushState(null, "", window.location.href);
+        setShowExitWarningModal(true);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  // =========================================================================
+  // BEFOREUNLOAD GUARD: Peringatan browser saat user ingin menutup tab/window
+  // =========================================================================
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isFinishedRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   // Hubungkan onTimeUpRef ke handleConfirmFinish
   useEffect(() => {
-    onTimeUpRef.current = handleConfirmFinish;
+    onTimeUpRef.current = () => void handleConfirmFinish("/exam/result");
   }, [handleConfirmFinish]);
 
   // Profil pengguna
@@ -555,7 +614,17 @@ function ExamEngineContent() {
           formattedTime={formattedTime}
           isSubmitting={isSubmitting}
           onCancel={() => setShowFinishModal(false)}
-          onConfirm={handleConfirmFinish}
+          onConfirm={() => void handleConfirmFinish("/exam/result")}
+        />
+      )}
+
+      {/* MODAL PERINGATAN KELUAR & SELESAIKAN UJIAN (NAVIGATION GUARD) */}
+      {showExitWarningModal && (
+        <ExitWarningModal
+          stats={stats}
+          isSubmitting={isSubmitting}
+          onCancel={() => setShowExitWarningModal(false)}
+          onConfirm={handleConfirmExit}
         />
       )}
 
