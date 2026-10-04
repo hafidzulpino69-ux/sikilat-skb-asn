@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import LoadingState from "@/components/LoadingState";
 import type { LastExamResult } from "@/types";
 import { PASSING_GRADE } from "@/constants";
 import { formatSpentTime, loadLastExamResult } from "@/utils";
@@ -77,12 +78,7 @@ function ExamResultContent() {
 
   if (!isLoaded || !result) {
     return (
-      <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
-        <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center gap-3">
-          <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-bold text-[#042E64]">Memuat Hasil Ujian...</span>
-        </div>
-      </div>
+      <LoadingState fullScreen backgroundClassName="bg-[#F4F6F9]" message="Menyiapkan ringkasan nilai ujian..." />
     );
   }
 
@@ -282,12 +278,7 @@ export default function ExamResultPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center gap-3">
-            <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-bold text-[#042E64]">Memuat Hasil Ujian...</span>
-          </div>
-        </div>
+        <LoadingState fullScreen backgroundClassName="bg-[#F4F6F9]" message="Menyiapkan ringkasan nilai ujian..." />
       }
     >
       <ExamResultContent />

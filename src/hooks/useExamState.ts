@@ -15,7 +15,9 @@ interface UseExamStateReturn {
   currentIndex: number;
   setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
   answers: UserAnswersMap;
+  setAnswers: React.Dispatch<React.SetStateAction<UserAnswersMap>>;
   doubtfulQuestions: DoubtfulQuestionsMap;
+  setDoubtfulQuestions: React.Dispatch<React.SetStateAction<DoubtfulQuestionsMap>>;
   stats: ExamStats;
   currentQuestion: ExamQuestion;
   currentSelectedOption: AnswerKey | undefined;
@@ -102,7 +104,9 @@ export function useExamState({
     currentIndex,
     setCurrentIndex,
     answers,
+    setAnswers,
     doubtfulQuestions,
+    setDoubtfulQuestions,
     stats,
     currentQuestion,
     currentSelectedOption,

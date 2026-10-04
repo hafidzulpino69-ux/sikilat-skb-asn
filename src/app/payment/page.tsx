@@ -14,12 +14,11 @@ import {
   Calendar,
   User,
   Mail,
-  Zap,
   Briefcase,
-  Layers,
-  Sparkles,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import LoadingState from "@/components/LoadingState";
+import { supabase } from "@/utils/supabaseClient";
 
 interface PendingOrder {
   agencyId: string;
@@ -37,30 +36,23 @@ interface PendingOrder {
   createdAt: string;
 }
 
-// =========================================================================
-// PENGATURAN DURASI MASA AKTIF PAKET RESMI:
-// 1. Paket Satuan (Paket 1, 2, 3): 90 Hari (90 * 24 * 60 * 60 * 1000 ms)
-// 2. Paket Bundling (Paket 1, 2, 3): 150 Hari (150 * 24 * 60 * 60 * 1000 ms)
-// =========================================================================
-export const SINGLE_PACKAGE_DURATION_MS = 90 * 24 * 60 * 60 * 1000; // 90 Hari
-export const BUNDLING_PACKAGE_DURATION_MS = 150 * 24 * 60 * 60 * 1000; // 150 Hari
-
 export default function PaymentPage() {
   const router = useRouter();
   const [order, setOrder] = useState<PendingOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"qris" | "va" | "ewallet">("qris");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [userName, setUserName] = useState("Peserta SIKILAT");
   const [userEmail, setUserEmail] = useState("peserta@example.com");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
+
+  const [invoiceNumber] = useState(() => {
+    const randomCode = Math.floor(1000 + Math.random() * 9000);
+    return `INV/SIKILAT/2026/09/${randomCode}`;
+  });
 
   useEffect(() => {
-    // Generate invoice number
-    const randomCode = Math.floor(1000 + Math.random() * 9000);
-    setInvoiceNumber(`INV/SIKILAT/2026/09/${randomCode}`);
-
     if (typeof window !== "undefined") {
-      // Ambil data user
+      // Ambil data user dari localStorage & Supabase Auth
       const storedUser = localStorage.getItem("skb_mock_user");
       if (storedUser) {
         try {
@@ -71,6 +63,15 @@ export default function PaymentPage() {
           console.error(e);
         }
       }
+
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          const userMeta = user.user_metadata || {};
+          const name = userMeta.full_name || user.email?.split("@")[0];
+          if (name) setUserName(name);
+          if (user.email) setUserEmail(user.email);
+        }
+      });
 
       // Ambil data pending order dari dashboard
       const storedOrder = localStorage.getItem("skb_pending_order");
@@ -101,62 +102,149 @@ export default function PaymentPage() {
     }
   }, []);
 
-  const handlePayNow = () => {
-    if (!order) return;
+  // Helper pembongkar error PostgREST / Supabase
+  const formatErrorDetail = (error: unknown) => {
+    if (!error) return {};
+    if (typeof error === "object") {
+      const e = error as Record<string, unknown>;
+      return {
+        message: e.message || (error instanceof Error ? error.message : String(error)),
+        code: e.code,
+        details: e.details,
+        hint: e.hint,
+        ...e,
+      };
+    }
+    return { message: String(error) };
+  };
+
+  const handlePayNow = async () => {
+    if (!order || isProcessing) return;
     setIsProcessing(true);
+    setPaymentError(null);
 
-    setTimeout(() => {
-      if (typeof window !== "undefined") {
-        const isBundling = order.packageKey === "bundling" || order.examNumbers.length > 1;
-        const durationMs = isBundling ? BUNDLING_PACKAGE_DURATION_MS : SINGLE_PACKAGE_DURATION_MS;
-        const purchasedTime = Date.now();
-        const expiresTime = purchasedTime + durationMs;
+    try {
+      // 1. Ambil session user saat ini dari Supabase Auth
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-        const newPurchase = {
-          id: `PURCHASE-${purchasedTime}-${Math.floor(Math.random() * 1000)}`,
-          invoiceNumber,
-          agencyName: order.agencyName,
-          agencyShortName: order.agencyShortName,
-          positionTitle: order.positionTitle,
-          positionCode: order.positionCode,
-          packageKey: order.packageKey,
-          packageName: order.packageName,
-          price: order.price,
-          examNumbers: order.examNumbers,
-          purchasedAt: new Date(purchasedTime).toISOString(),
-          expiresAt: new Date(expiresTime).toISOString(), // Masa aktif 90 hari (satuan) atau 150 hari (bundling)
-          durationMs,
-        };
-
-        // Ambil riwayat paket lama agar TIDAK tertimpa (append mode)
-        const existingRaw = localStorage.getItem("skb_user_purchased_packages");
-        let existingList: any[] = [];
-        if (existingRaw) {
-          try {
-            existingList = JSON.parse(existingRaw);
-            if (!Array.isArray(existingList)) existingList = [];
-          } catch (e) {
-            existingList = [];
-          }
-        }
-
-        // Tambahkan paket baru ke dalam riwayat (append)
-        existingList.push(newPurchase);
-        localStorage.setItem("skb_user_purchased_packages", JSON.stringify(existingList));
+      if (userError || !user) {
+        throw new Error(
+          "Sesi login Anda tidak ditemukan atau telah berakhir. Silakan login kembali untuk menyelesaikan transaksi."
+        );
       }
 
+      const examNums =
+        order.examNumbers && order.examNumbers.length > 0
+          ? order.examNumbers
+          : [1];
+
+      const positionSlug = (order.positionId || order.positionTitle)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      const agencyShort =
+        order.agencyShortName || order.agencyName || "Instansi";
+
+      // 2. Tentukan masa aktif berdasarkan jenis paket (WAJIB NOT NULL di DB)
+      const validityDays = order.packageKey === "bundling" ? 150 : 90;
+      const expiresAt = new Date(
+        Date.now() + validityDays * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      // 3. Untuk setiap nomor paket, pastikan master di packages ada & simpan akses di user_packages
+      for (const num of examNums) {
+        const masterSlug = `${positionSlug}-paket-${num}`;
+
+        // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
+        const { data: pkgData, error: pkgError } = await supabase
+          .from("packages")
+          .upsert(
+            {
+              slug: masterSlug,
+              title: `Paket ${num}: SKB ${agencyShort}`,
+              agency_name: order.agencyName,
+              position_title: order.positionTitle,
+              package_number: num,
+              total_questions: 100,
+              duration_minutes: 90,
+              max_score: 500,
+              is_active: true,
+            },
+            { onConflict: "slug" }
+          )
+          .select("id")
+          .single();
+
+        if (pkgError || !pkgData) {
+          console.error(
+            "Detail Error:",
+            JSON.stringify(formatErrorDetail(pkgError), null, 2)
+          );
+          throw pkgError || new Error("Gagal mendaftarkan master paket.");
+        }
+
+        // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT
+        const { error: userPkgError } = await supabase
+          .from("user_packages")
+          .upsert(
+            {
+              user_id: user.id,
+              package_id: pkgData.id,
+              expires_at: expiresAt,
+              purchased_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id, package_id" }
+          );
+
+        if (userPkgError) {
+          console.error(
+            "Detail Error:",
+            JSON.stringify(formatErrorDetail(userPkgError), null, 2)
+          );
+          throw userPkgError;
+        }
+      }
+
+      // Bersihkan pending order setelah berhasil
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("skb_pending_order");
+      }
+
+      // Arahkan ke halaman Daftar Paket Anda dengan flag sukses
+      router.push("/my-packages?purchased=1");
+    } catch (err: unknown) {
+      console.error(
+        "Detail Error:",
+        JSON.stringify(formatErrorDetail(err), null, 2)
+      );
+      const formatted = formatErrorDetail(err);
+      const rawMsg =
+        (formatted.message as string) ||
+        (err instanceof Error ? err.message : "");
+
+      let userFriendlyMessage =
+        "Gagal memproses pembayaran paket. Silakan periksa koneksi atau coba beberapa saat lagi.";
+      if (rawMsg.includes("Sesi login") || rawMsg.includes("login kembali")) {
+        userFriendlyMessage = rawMsg;
+      } else if (
+        rawMsg.toLowerCase().includes("network") ||
+        rawMsg.toLowerCase().includes("koneksi") ||
+        rawMsg.toLowerCase().includes("fetch")
+      ) {
+        userFriendlyMessage =
+          "Koneksi internet bermasalah. Periksa jaringan Anda dan coba lagi.";
+      }
+      setPaymentError(userFriendlyMessage);
       setIsProcessing(false);
-      // Arahkan pengguna ke halaman "Daftar Paket Anda"
-      router.push("/my-packages");
-    }, 900);
+    }
   };
 
   if (!order) {
-    return (
-      <div className="min-h-screen bg-[#FCF4E7] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#FB6E09]" />
-      </div>
-    );
+    return <LoadingState fullScreen message="Menyiapkan rincian pesanan..." />;
   }
 
   return (
@@ -366,6 +454,11 @@ export default function PaymentPage() {
 
             {/* TOMBOL BAYAR SEKARANG */}
             <div className="pt-4 space-y-3">
+              {paymentError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-xs font-semibold">
+                  {paymentError}
+                </div>
+              )}
               <button
                 type="button"
                 disabled={isProcessing}
@@ -375,7 +468,7 @@ export default function PaymentPage() {
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Memproses Pembayaran...</span>
+                    <span>Sedang memproses pembayaran...</span>
                   </>
                 ) : (
                   <>

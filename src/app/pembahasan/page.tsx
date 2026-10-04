@@ -137,7 +137,7 @@ function PembahasanContent() {
       <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
         <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center gap-3">
           <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-bold text-[#042E64]">Memuat Halaman Pembahasan...</span>
+          <span className="text-sm font-bold text-[#042E64]">Menyiapkan pembahasan dan analisis soal...</span>
         </div>
       </div>
     );
@@ -375,7 +375,7 @@ export default function PembahasanPage() {
         <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
           <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-md flex items-center gap-3">
             <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-bold text-[#042E64]">Memuat Pembahasan Soal...</span>
+            <span className="text-sm font-bold text-[#042E64]">Menyiapkan pembahasan dan analisis soal...</span>
           </div>
         </div>
       }

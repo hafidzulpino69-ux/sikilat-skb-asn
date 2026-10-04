@@ -34,6 +34,7 @@ import {
   getPositionPackages,
   PositionPackage,
 } from "@/data/skbCatalog";
+import { supabase } from "@/utils/supabaseClient";
 
 interface UserData {
   name: string;
@@ -86,9 +87,15 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Gagal logout:", e);
+    }
     if (typeof window !== "undefined") {
       localStorage.removeItem("skb_mock_user");
+      localStorage.removeItem("skb_user");
       localStorage.removeItem("skb_terms_accepted");
     }
     router.push("/login");

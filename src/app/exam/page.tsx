@@ -8,10 +8,9 @@ import { useExamTimer, useExamState, useAutosave } from "@/hooks";
 import {
   calculateScore,
   loadUserProfile,
-  updatePackageScore,
   saveLastExamResult,
-  loadPurchasedPackages,
 } from "@/utils";
+import { supabase } from "@/utils/supabaseClient";
 import type { FontSizePreference } from "@/types";
 
 import {
@@ -23,6 +22,9 @@ import {
   MobileGridDrawer,
   ResumeBanner,
 } from "@/components/exam";
+import LoadingState from "@/components/LoadingState";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function ExamEngineContent() {
   const router = useRouter();
@@ -30,21 +32,24 @@ function ExamEngineContent() {
 
   // Query parameter context
   const cardIdParam = searchParams.get("cardId") || "";
-  const packageIdParam = searchParams.get("packageId");
+  const packageIdParam = searchParams.get("packageId") || "";
   const packageTitleParam = searchParams.get("packageTitle") || "Paket 1: SKB Formasi";
   const positionParam = searchParams.get("position") || "Petugas Pengelola Barang Bukti";
   const agencyParam = searchParams.get("agency") || "Kejaksaan Republik Indonesia";
 
-  // Identifikasi Package ID unik (misal: "paket-1", "paket-2", "paket-3")
-  const currentPackageId =
-    packageIdParam ||
-    (cardIdParam.includes("exam-2") || cardIdParam.includes("paket-2") || packageTitleParam.includes("Paket 2")
-      ? "paket-2"
-      : cardIdParam.includes("exam-3") || cardIdParam.includes("paket-3") || packageTitleParam.includes("Paket 3")
-      ? "paket-3"
-      : "paket-1");
+  const effectiveCardId = cardIdParam || packageIdParam || "default-exam-card";
 
-  const effectiveCardId = cardIdParam || currentPackageId;
+  // Supabase package UUID state & Active Ongoing Exam Result ID
+  const [resolvedPackageUuid, setResolvedPackageUuid] = useState<string>(
+    UUID_REGEX.test(packageIdParam)
+      ? packageIdParam
+      : UUID_REGEX.test(cardIdParam)
+      ? cardIdParam
+      : ""
+  );
+  const [activeResultId, setActiveResultId] = useState<string | null>(null);
+  const [isSupabaseSessionReady, setIsSupabaseSessionReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Data Peserta
   const [userName, setUserName] = useState("Peserta Simulasi CAT");
@@ -55,10 +60,57 @@ function ExamEngineContent() {
   const [showMobileGrid, setShowMobileGrid] = useState(false);
   const [fontSize, setFontSize] = useState<FontSizePreference>("normal");
 
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const questions = DUMMY_EXAM_QUESTIONS;
 
   // =========================================================================
-  // HOOK 1: Autosave & Resume (terisolasi per paket)
+  // Resolve UUID paket dari Supabase jika belum berbentuk UUID
+  // =========================================================================
+  useEffect(() => {
+    let isMounted = true;
+
+    async function resolvePackageUuid() {
+      if (UUID_REGEX.test(packageIdParam)) {
+        setResolvedPackageUuid(packageIdParam);
+        return;
+      }
+      if (UUID_REGEX.test(cardIdParam)) {
+        setResolvedPackageUuid(cardIdParam);
+        return;
+      }
+
+      try {
+        const targetNumber =
+          cardIdParam.includes("2") || packageTitleParam.includes("Paket 2")
+            ? 2
+            : cardIdParam.includes("3") || packageTitleParam.includes("Paket 3")
+            ? 3
+            : 1;
+
+        const { data } = await supabase
+          .from("packages")
+          .select("id")
+          .eq("package_number", targetNumber)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
+        if (isMounted && data?.id) {
+          setResolvedPackageUuid(data.id);
+        }
+      } catch (err) {
+        console.warn("Gagal resolve UUID paket dari Supabase:", err);
+      }
+    }
+
+    resolvePackageUuid();
+    return () => {
+      isMounted = false;
+    };
+  }, [cardIdParam, packageIdParam, packageTitleParam]);
+
+  // =========================================================================
+  // HOOK 1: Autosave & Resume (localStorage fallback)
   // =========================================================================
   const {
     isSessionLoaded,
@@ -76,7 +128,9 @@ function ExamEngineContent() {
     currentIndex,
     setCurrentIndex,
     answers,
+    setAnswers,
     doubtfulQuestions,
+    setDoubtfulQuestions,
     stats,
     currentQuestion,
     currentSelectedOption,
@@ -103,61 +157,281 @@ function ExamEngineContent() {
   const { secondsLeft, setSecondsLeft, formattedTime, isWarning } = useExamTimer({
     initialSeconds: restoredSession?.secondsLeft ?? EXAM_DURATION_SECONDS,
     isFinished,
-    isReady: isSessionLoaded,
+    isReady: isSessionLoaded && isSupabaseSessionReady,
     onTimeUp: () => onTimeUpRef.current(),
   });
 
   // =========================================================================
-  // HANDLER: Selesaikan Ujian (kalkulasi, simpan skor, clear autosave)
+  // INISIALISASI SESI UJIAN SUPABASE & RESTORE SAAT F5/REFRESH (Bug 3)
   // =========================================================================
-  const handleConfirmFinish = useCallback(() => {
-    setIsFinished(true);
-    setShowFinishModal(false);
+  useEffect(() => {
+    let isMounted = true;
 
-    const scoreResult = calculateScore(questions, answers);
+    async function initOrRestoreSupabaseSession() {
+      if (!resolvedPackageUuid) return;
 
-    // Update skor HANYA untuk packageId spesifik ini!
-    const { highestScore, previousHighest } = updatePackageScore(
-      currentPackageId,
-      scoreResult.score,
-      cardIdParam || undefined
-    );
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-    // Hapus autosave session paket ini
-    clearSession();
+        if (!user) {
+          // Jika tidak login, alihkan
+          router.push(`/login?redirect=/exam?packageId=${resolvedPackageUuid}`);
+          return;
+        }
 
-    // Simpan hasil ujian untuk /exam/result & /pembahasan
-    saveLastExamResult({
-      cardId: effectiveCardId,
-      packageId: currentPackageId,
-      packageTitle: packageTitleParam,
-      positionTitle: positionParam,
-      agencyName: agencyParam,
-      score: scoreResult.score,
-      highestScore,
-      previousHighest,
-      maxScore: scoreResult.maxScore,
-      totalQuestions: TOTAL_QUESTIONS,
-      correctCount: scoreResult.correctCount,
-      wrongCount: scoreResult.wrongCount,
-      unansweredCount: scoreResult.unansweredCount,
-      timeSpentSeconds: EXAM_DURATION_SECONDS - secondsLeft,
-      completedAt: new Date().toISOString(),
-      userAnswers: answers,
-      doubtfulQuestions,
-    });
+        // Cari sesi ujian aktif yang belum selesai (is_finished = false) di Supabase
+        const { data: ongoingSession, error: fetchErr } = await supabase
+          .from("exam_results")
+          .select("*")
+          .eq("package_id", resolvedPackageUuid)
+          .eq("user_id", user.id)
+          .eq("is_finished", false)
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-    router.push("/exam/result");
+        if (fetchErr) {
+          console.warn("Gagal mengecek sesi aktif di Supabase:", fetchErr);
+        }
+
+        if (ongoingSession && isMounted) {
+          // RESTORE DATA DARI SUPABASE (F5 / Refresh Handled)
+          setActiveResultId(ongoingSession.id);
+
+          if (ongoingSession.user_answers && Object.keys(ongoingSession.user_answers).length > 0) {
+            setAnswers(ongoingSession.user_answers);
+          }
+          if (ongoingSession.doubtful_answers && Object.keys(ongoingSession.doubtful_answers).length > 0) {
+            setDoubtfulQuestions(ongoingSession.doubtful_answers);
+          }
+          if (typeof ongoingSession.current_index === "number") {
+            setCurrentIndex(ongoingSession.current_index);
+          }
+          if (typeof ongoingSession.seconds_left === "number" && ongoingSession.seconds_left > 0) {
+            setSecondsLeft(ongoingSession.seconds_left);
+          }
+
+          setHasResumed(true);
+        } else if (isMounted) {
+          // BUAT SESI BARU DI SUPABASE DENGAN is_finished = false
+          const { data: newSession, error: createErr } = await supabase
+            .from("exam_results")
+            .insert([
+              {
+                package_id: resolvedPackageUuid,
+                user_id: user.id,
+                score: 0,
+                correct_count: 0,
+                wrong_count: 0,
+                unanswered_count: TOTAL_QUESTIONS,
+                time_spent_seconds: 0,
+                seconds_left: EXAM_DURATION_SECONDS,
+                current_index: 0,
+                user_answers: {},
+                doubtful_answers: {},
+                is_finished: false,
+                completed_at: new Date().toISOString(),
+              },
+            ])
+            .select("id")
+            .single();
+
+          if (createErr) {
+            console.warn("Peringatan inisialisasi sesi Supabase:", createErr);
+          } else if (newSession) {
+            setActiveResultId(newSession.id);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal menginisialisasi sesi ujian di Supabase:", err);
+      } finally {
+        if (isMounted) setIsSupabaseSessionReady(true);
+      }
+    }
+
+    initOrRestoreSupabaseSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedPackageUuid, router, setAnswers, setCurrentIndex, setDoubtfulQuestions, setHasResumed, setSecondsLeft]);
+
+  // =========================================================================
+  // REAL-TIME DEBOUNCED AUTOSAVE KE SUPABASE (UPDATE SETIAP PERUBAHAN JAWABAN)
+  // =========================================================================
+  useEffect(() => {
+    if (!activeResultId || !isSupabaseSessionReady || isFinished || secondsLeft <= 0) return;
+
+    // Simpan juga ke localStorage sebagai cache offline
+    saveSession({ secondsLeft, answers, doubtfulQuestions, currentIndex });
+
+    // Debounce 1000ms untuk update ke Supabase agar hemat request tapi tetap real-time
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await supabase
+          .from("exam_results")
+          .update({
+            user_answers: answers,
+            doubtful_answers: doubtfulQuestions,
+            current_index: currentIndex,
+            seconds_left: secondsLeft,
+            time_spent_seconds: Math.max(0, EXAM_DURATION_SECONDS - secondsLeft),
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", activeResultId);
+      } catch (err) {
+        console.warn("Gagal autosave real-time ke Supabase:", err);
+      }
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [
+    activeResultId,
+    isSupabaseSessionReady,
+    isFinished,
+    secondsLeft,
+    answers,
+    doubtfulQuestions,
+    currentIndex,
+    saveSession,
+  ]);
+
+  // =========================================================================
+  // HANDLER: Selesaikan Ujian (Finalisasi status is_finished = true di Supabase)
+  // =========================================================================
+  const handleConfirmFinish = useCallback(async () => {
+    try {
+      setIsSubmitting(true);
+
+      const scoreResult = calculateScore(questions, answers);
+      const timeSpentSeconds = Math.max(0, EXAM_DURATION_SECONDS - secondsLeft);
+      const targetUuid = resolvedPackageUuid;
+
+      let highestScore = scoreResult.score;
+      let previousHighest = 0;
+
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (targetUuid && currentUser) {
+        // 1. Ambil rekap skor paket sebelumnya dari view package_score_summary
+        const { data: prevSummary } = await supabase
+          .from("package_score_summary")
+          .select("highest_score")
+          .eq("package_id", targetUuid)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+
+        if (prevSummary) {
+          previousHighest = Number(prevSummary.highest_score) || 0;
+        }
+
+        // 2. Finalisasi baris sesi ujian aktif di tabel exam_results Supabase
+        if (activeResultId) {
+          const { error: updateError } = await supabase
+            .from("exam_results")
+            .update({
+              score: scoreResult.score,
+              correct_count: scoreResult.correctCount,
+              wrong_count: scoreResult.wrongCount,
+              unanswered_count: scoreResult.unansweredCount,
+              time_spent_seconds: timeSpentSeconds,
+              seconds_left: 0,
+              user_answers: answers,
+              doubtful_answers: doubtfulQuestions,
+              is_finished: true,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", activeResultId);
+
+          if (updateError) {
+            console.error("Gagal finalisasi hasil ujian di Supabase:", updateError);
+          }
+        } else {
+          // Fallback jika activeResultId tidak ada
+          await supabase.from("exam_results").insert([
+            {
+              package_id: targetUuid,
+              user_id: currentUser.id,
+              score: scoreResult.score,
+              correct_count: scoreResult.correctCount,
+              wrong_count: scoreResult.wrongCount,
+              unanswered_count: scoreResult.unansweredCount,
+              time_spent_seconds: timeSpentSeconds,
+              seconds_left: 0,
+              user_answers: answers,
+              doubtful_answers: doubtfulQuestions,
+              is_finished: true,
+              completed_at: new Date().toISOString(),
+            },
+          ]);
+        }
+
+        // 3. Ambil ringkasan nilai tertinggi terbaru yang teragregasi di view
+        const { data: updatedSummary } = await supabase
+          .from("package_score_summary")
+          .select("highest_score")
+          .eq("package_id", targetUuid)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+
+        if (updatedSummary) {
+          highestScore = Number(updatedSummary.highest_score) || scoreResult.score;
+        }
+      }
+
+      // Hapus autosave session lokal paket ini
+      clearSession();
+
+      // Simpan rekap ujian untuk halaman /exam/result & /pembahasan
+      saveLastExamResult({
+        cardId: targetUuid || effectiveCardId,
+        packageId: targetUuid || effectiveCardId,
+        packageTitle: packageTitleParam,
+        positionTitle: positionParam,
+        agencyName: agencyParam,
+        score: scoreResult.score,
+        highestScore: Math.max(highestScore, scoreResult.score),
+        previousHighest,
+        maxScore: scoreResult.maxScore,
+        totalQuestions: TOTAL_QUESTIONS,
+        correctCount: scoreResult.correctCount,
+        wrongCount: scoreResult.wrongCount,
+        unansweredCount: scoreResult.unansweredCount,
+        timeSpentSeconds,
+        completedAt: new Date().toISOString(),
+        userAnswers: answers,
+        doubtfulQuestions,
+      });
+
+      setIsFinished(true);
+      setShowFinishModal(false);
+      router.push("/exam/result");
+    } catch (err) {
+      console.error("Terjadi kesalahan saat menyimpan hasil ujian:", err);
+      setIsFinished(true);
+      setShowFinishModal(false);
+      router.push("/exam/result");
+    } finally {
+      setIsSubmitting(false);
+    }
   }, [
     questions,
     answers,
     doubtfulQuestions,
-    currentPackageId,
+    resolvedPackageUuid,
     effectiveCardId,
-    cardIdParam,
     packageTitleParam,
     positionParam,
     agencyParam,
+    activeResultId,
     clearSession,
     router,
     secondsLeft,
@@ -168,25 +442,13 @@ function ExamEngineContent() {
     onTimeUpRef.current = handleConfirmFinish;
   }, [handleConfirmFinish]);
 
-  // =========================================================================
   // Profil pengguna
-  // =========================================================================
   useEffect(() => {
     const profile = loadUserProfile();
     if (profile?.name) setUserName(profile.name);
   }, []);
 
-  // =========================================================================
-  // Autosave berkala (setiap detik & setiap state berubah)
-  // =========================================================================
-  useEffect(() => {
-    if (!isSessionLoaded || isFinished || secondsLeft <= 0) return;
-    saveSession({ secondsLeft, answers, doubtfulQuestions, currentIndex });
-  }, [isSessionLoaded, isFinished, secondsLeft, answers, doubtfulQuestions, currentIndex, saveSession]);
-
-  // =========================================================================
-  // Wrapped handlers dengan instant-save
-  // =========================================================================
+  // Wrapped handlers
   const handleSelectOption = useCallback(
     (key: "A" | "B" | "C" | "D" | "E") => {
       rawSelectOption(key);
@@ -211,23 +473,17 @@ function ExamEngineContent() {
     [handleJumpToQuestion]
   );
 
-  // =========================================================================
   // Loading State
-  // =========================================================================
-  if (!isSessionLoaded) {
+  if (!isSessionLoaded || !isSupabaseSessionReady) {
     return (
-      <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
-        <div className="p-6 rounded-2xl bg-white border-2 border-slate-200 shadow-md flex items-center gap-3">
-          <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-black text-[#042E64]">Memeriksa Sesi &amp; Memuat Lembar Ujian CAT BKN...</span>
-        </div>
-      </div>
+      <LoadingState
+        fullScreen
+        backgroundClassName="bg-[#F4F6F9]"
+        message="Menyiapkan lembar ujian CAT..."
+      />
     );
   }
 
-  // =========================================================================
-  // RENDER: Thin Container — hanya memanggil hooks + merender components
-  // =========================================================================
   return (
     <div className="min-h-screen bg-[#F4F6F9] flex flex-col font-sans select-none">
       {/* Banner Resume Sesi */}
@@ -239,7 +495,7 @@ function ExamEngineContent() {
         />
       )}
 
-      {/* Header CAT */}
+      {/* 1. STICKY TOP HEADER */}
       <ExamHeader
         packageTitle={packageTitleParam}
         positionTitle={positionParam}
@@ -250,15 +506,17 @@ function ExamEngineContent() {
         formattedTime={formattedTime}
         isWarning={isWarning}
         fontSize={fontSize}
-        onToggleFontSize={() => setFontSize((f) => (f === "normal" ? "large" : "normal"))}
+        onToggleFontSize={() =>
+          setFontSize((prev) => (prev === "normal" ? "large" : "normal"))
+        }
         onOpenMobileGrid={() => setShowMobileGrid(true)}
       />
 
-      {/* Area Utama: Soal (Kiri) & Grid (Kanan) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
-        {/* Kolom Kiri: Soal & Aksi */}
+      {/* 2. MAIN LAYOUT */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Kolom Kiri: Soal, Opsi Jawaban, Tombol Aksi */}
         <section className="lg:col-span-8 flex flex-col gap-4">
-          <div className="bg-white rounded-2xl border-2 border-slate-200/90 shadow-sm p-4 sm:p-6 lg:p-7 flex flex-col justify-between min-h-[460px]">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-slate-200/90 shadow-sm p-4 sm:p-7 min-h-[520px] flex flex-col justify-between">
             <QuestionDisplay
               question={currentQuestion}
               currentIndex={currentIndex}
@@ -278,7 +536,7 @@ function ExamEngineContent() {
           </div>
         </section>
 
-        {/* Kolom Kanan: Navigation Grid */}
+        {/* Kolom Kanan: Grid Navigasi 1-100 */}
         <NavigationGrid
           questions={questions}
           currentIndex={currentIndex}
@@ -290,17 +548,18 @@ function ExamEngineContent() {
         />
       </main>
 
-      {/* Modal Konfirmasi Selesai */}
+      {/* MODAL KONFIRMASI AKHIRI UJIAN */}
       {showFinishModal && (
         <FinishModal
           stats={stats}
           formattedTime={formattedTime}
+          isSubmitting={isSubmitting}
           onCancel={() => setShowFinishModal(false)}
           onConfirm={handleConfirmFinish}
         />
       )}
 
-      {/* Drawer Mobile Grid */}
+      {/* DRAWER NAVIGASI GRID UNTUK MOBILE */}
       {showMobileGrid && (
         <MobileGridDrawer
           questions={questions}
@@ -309,7 +568,10 @@ function ExamEngineContent() {
           doubtfulQuestions={doubtfulQuestions}
           onJumpToQuestion={handleJumpMobile}
           onClose={() => setShowMobileGrid(false)}
-          onShowFinishModal={() => setShowFinishModal(true)}
+          onShowFinishModal={() => {
+            setShowMobileGrid(false);
+            setShowFinishModal(true);
+          }}
         />
       )}
     </div>
@@ -320,12 +582,11 @@ export default function ExamPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center">
-          <div className="p-6 rounded-2xl bg-white border-2 border-slate-200 shadow-md flex items-center gap-3">
-            <div className="w-6 h-6 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-black text-[#042E64]">Memuat Lembar Ujian CAT BKN...</span>
-          </div>
-        </div>
+        <LoadingState
+          fullScreen
+          backgroundClassName="bg-[#F4F6F9]"
+          message="Menyiapkan lembar ujian CAT..."
+        />
       }
     >
       <ExamEngineContent />

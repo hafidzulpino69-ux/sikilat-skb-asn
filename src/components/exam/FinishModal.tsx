@@ -6,6 +6,7 @@ import type { ExamStats } from "@/types";
 interface FinishModalProps {
   stats: ExamStats;
   formattedTime: string;
+  isSubmitting?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -13,6 +14,7 @@ interface FinishModalProps {
 export default function FinishModal({
   stats,
   formattedTime,
+  isSubmitting = false,
   onCancel,
   onConfirm,
 }: FinishModalProps) {
@@ -100,7 +102,8 @@ export default function FinishModal({
           <button
             type="button"
             onClick={onCancel}
-            className="py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            className="py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Lanjutkan Ujian
           </button>
@@ -108,9 +111,17 @@ export default function FinishModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="py-3 px-4 rounded-xl font-black text-xs sm:text-sm text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/30 cursor-pointer"
+            disabled={isSubmitting}
+            className="py-3 px-4 rounded-xl font-black text-xs sm:text-sm text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Ya, Akhiri Ujian
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Menyimpan hasil ujian...</span>
+              </>
+            ) : (
+              <span>Ya, Akhiri Ujian</span>
+            )}
           </button>
         </div>
       </div>

@@ -4,15 +4,11 @@ import type {
   LastExamResult,
   PackageScoresMap,
   PackageScoreRecord,
-  UserAnswersMap,
-  DoubtfulQuestionsMap,
 } from "@/types";
-import type { PurchasedItem } from "@/types";
 import {
   STORAGE_KEY_EXAM_SESSION_PREFIX,
   STORAGE_KEY_LAST_EXAM_RESULT,
   STORAGE_KEY_PACKAGE_SCORES,
-  STORAGE_KEY_PURCHASED_PACKAGES,
   STORAGE_KEY_USER_PROFILE,
 } from "@/constants";
 
@@ -158,25 +154,7 @@ export function updatePackageScore(
 }
 
 // ─── Purchased Packages ──────────────────────────────────────────────────
-
-/** Membaca daftar paket terbeli */
-export function loadPurchasedPackages(): PurchasedItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PURCHASED_PACKAGES);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Menyimpan daftar paket terbeli */
-export function savePurchasedPackages(packages: PurchasedItem[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY_PURCHASED_PACKAGES, JSON.stringify(packages));
-}
+// Dipindahkan ke Supabase (tabel user_packages + RPC purchase_packages).
 
 // ─── User Profile ────────────────────────────────────────────────────────
 

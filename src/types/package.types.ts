@@ -28,6 +28,7 @@ export interface ExamCardItem {
   cardId: string;
   packageId?: string;
   slug?: string;
+  userId?: string;
   purchaseId: string;
   examNumber: number;
   packageTitle: string;
