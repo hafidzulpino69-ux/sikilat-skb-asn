@@ -94,7 +94,7 @@ export default function FinishModal({
         ) : (
           <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Seluruh 100 butir soal telah berhasil Anda jawab dengan lengkap!</span>
+            <span>Seluruh {stats.totalCount} butir soal telah berhasil Anda jawab dengan lengkap!</span>
           </div>
         )}
 

@@ -11,7 +11,7 @@ export interface QuestionOption {
 
 /** Butir soal ujian CAT */
 export interface ExamQuestion {
-  id: number;
+  id: string | number;
   questionNumber: number;
   category: string;
   questionText: string;
@@ -21,10 +21,10 @@ export interface ExamQuestion {
 }
 
 /** Map jawaban peserta: questionId -> kunci yang dipilih */
-export type UserAnswersMap = Record<number, AnswerKey>;
+export type UserAnswersMap = Record<string | number, AnswerKey>;
 
 /** Map soal ragu-ragu: questionId -> boolean */
-export type DoubtfulQuestionsMap = Record<number, boolean>;
+export type DoubtfulQuestionsMap = Record<string | number, boolean>;
 
 /** Statistik jawaban real-time saat ujian berlangsung */
 export interface ExamStats {

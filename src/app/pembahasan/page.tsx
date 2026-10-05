@@ -26,9 +26,9 @@ import {
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { DUMMY_EXAM_QUESTIONS } from "@/data/dummyExamQuestions";
-import type { LastExamResult, ExamQuestion, QuestionFilterType, UserAnswersMap } from "@/types";
-import { TOTAL_QUESTIONS } from "@/constants";
+import type { LastExamResult, ExamQuestion, QuestionFilterType, UserAnswersMap, AnswerKey } from "@/types";
 import { loadLastExamResult } from "@/utils";
+import { supabase } from "@/utils/supabaseClient";
 import { DiscussionItem } from "@/components/discussion";
 
 /** Données mock par défaut si accès direct */
@@ -58,12 +58,58 @@ function PembahasanContent() {
   const [filterType, setFilterType] = useState<QuestionFilterType>("all");
   const [viewMode, setViewMode] = useState<"interactive" | "list">("interactive");
 
-  const questions: ExamQuestion[] = DUMMY_EXAM_QUESTIONS;
+  const [questions, setQuestions] = useState<ExamQuestion[]>(DUMMY_EXAM_QUESTIONS);
 
   useEffect(() => {
-    const loaded = loadLastExamResult();
-    setResult(loaded ?? FALLBACK_RESULT);
-    setIsLoaded(true);
+    let isMounted = true;
+
+    async function loadData() {
+      const loaded = loadLastExamResult();
+      const currentResult = loaded ?? FALLBACK_RESULT;
+      setResult(currentResult);
+
+      const targetPkgId = currentResult.packageId || currentResult.cardId;
+      if (
+        targetPkgId &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetPkgId)
+      ) {
+        try {
+          const { data: dbQuestions } = await supabase
+            .from("questions")
+            .select("*")
+            .eq("package_id", targetPkgId)
+            .order("question_number", { ascending: true });
+
+          if (isMounted && dbQuestions && dbQuestions.length > 0) {
+            const mapped: ExamQuestion[] = dbQuestions.map((q, idx) => ({
+              id: q.id || idx + 1,
+              questionNumber: q.question_number || idx + 1,
+              category: q.category || "SKB Khusus",
+              questionText: q.soal,
+              options: [
+                { key: "A", text: q.opsi_a },
+                { key: "B", text: q.opsi_b },
+                { key: "C", text: q.opsi_c },
+                { key: "D", text: q.opsi_d },
+                { key: "E", text: q.opsi_e },
+              ],
+              correctAnswer: (q.kunci_jawaban?.toUpperCase() || "A") as AnswerKey,
+              explanation: q.pembahasan || "",
+            }));
+            setQuestions(mapped);
+          }
+        } catch {
+          // Fallback ke dummy jika offline
+        }
+      }
+
+      if (isMounted) setIsLoaded(true);
+    }
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Filter daftar soal
@@ -115,7 +161,7 @@ function PembahasanContent() {
     }
   };
 
-  const getGridItemColor = (qId: number, idx: number) => {
+  const getGridItemColor = (qId: string | number, idx: number) => {
     if (!result) return "bg-slate-100 text-slate-700 border-slate-300";
     const uAns = result.userAnswers[qId];
     const correctKey = questions[idx]?.correctAnswer;
@@ -236,7 +282,7 @@ function PembahasanContent() {
               </button>
 
               <span className="text-xs font-bold text-slate-500">
-                {currentIndex + 1} dari {TOTAL_QUESTIONS} Soal
+                {currentIndex + 1} dari {questions.length} Soal
               </span>
 
               <button
@@ -252,18 +298,18 @@ function PembahasanContent() {
           </div>
         </section>
 
-        {/* KOLOM KANAN: NAVIGASI GRID 100 SOAL & FILTER: 4 KOLOM */}
+        {/* KOLOM KANAN: NAVIGASI GRID & FILTER: 4 KOLOM */}
         <aside className="lg:col-span-4 bg-white rounded-3xl border-2 border-slate-200/90 shadow-sm p-4 sm:p-5 flex flex-col justify-between sticky top-28 space-y-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#FB6E09]" />
                 <h3 className="text-sm font-black text-[#042E64] uppercase tracking-wider">
-                  Navigasi {TOTAL_QUESTIONS} Soal
+                  Navigasi {questions.length} Soal
                 </h3>
               </div>
               <span className="text-xs font-bold text-slate-500">
-                Total: {TOTAL_QUESTIONS}
+                Total: {questions.length}
               </span>
             </div>
 
@@ -276,7 +322,7 @@ function PembahasanContent() {
                   filterType === "all" ? "bg-white text-[#042E64] shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Semua ({TOTAL_QUESTIONS})
+                Semua ({questions.length})
               </button>
               <button
                 type="button"

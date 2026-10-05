@@ -33,9 +33,11 @@ export function calculateScore(
     }
   });
 
+  const computedMax = questions.length > 0 ? questions.length * POINTS_PER_CORRECT : MAX_SCORE;
+
   return {
     score: correctCount * POINTS_PER_CORRECT,
-    maxScore: MAX_SCORE,
+    maxScore: computedMax,
     correctCount,
     wrongCount,
     unansweredCount,

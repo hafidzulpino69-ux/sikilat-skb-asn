@@ -1,15 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Clock,
-  Award,
   LogOut,
-  FileCheck,
-  CheckCircle,
-  TrendingUp,
   AlertCircle,
   Zap,
   Building2,
@@ -19,22 +15,14 @@ import {
   Check,
   Sparkles,
   Layers,
-  HeartPulse,
-  Wallet,
-  GraduationCap,
-  Scale,
-  Shield,
   ArrowRight,
   PackageOpen,
+  RefreshCw,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
-import {
-  AGENCIES_DATA,
-  AgencyItem,
-  getPositionPackages,
-  PositionPackage,
-} from "@/data/skbCatalog";
+import { getPositionPackages, PositionPackage } from "@/data/skbCatalog";
 import { supabase } from "@/utils/supabaseClient";
+import type { PackageRecord } from "@/types/admin.types";
 
 interface UserData {
   id?: string;
@@ -42,6 +30,21 @@ interface UserData {
   email: string;
   package?: string;
   isLoggedIn: boolean;
+}
+
+interface PositionGroup {
+  id: string;
+  title: string;
+  agencyName: string;
+  packages: PackageRecord[];
+  totalQuestions: number;
+  durationMinutes: number;
+}
+
+interface AgencyGroup {
+  id: string;
+  name: string;
+  positions: PositionGroup[];
 }
 
 export default function DashboardPage() {
@@ -55,20 +58,44 @@ export default function DashboardPage() {
     isLoggedIn: true,
   });
 
-  // Flow State: Step 1 (Instansi) -> Step 2 (Jabatan) -> Step 3 (4 Kotak Paket)
-  const [selectedAgencyId, setSelectedAgencyId] = useState<string>("kemenkes");
-  const [selectedPositionId, setSelectedPositionId] = useState<string>("kemenkes-epidemiolog");
+  // Database packages state
+  const [packages, setPackages] = useState<PackageRecord[]>([]);
+  const [isLoadingPackages, setIsLoadingPackages] = useState<boolean>(true);
+
+  // Flow Selection State: Step 1 (Instansi) -> Step 2 (Jabatan) -> Step 3 (4 Kotak Paket)
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
+  const [selectedPositionId, setSelectedPositionId] = useState<string>("");
   const [selectedPackageKey, setSelectedPackageKey] = useState<"paket-1" | "paket-2" | "paket-3" | "bundling">("bundling");
 
   // Search queries
   const [searchAgency, setSearchAgency] = useState<string>("");
   const [searchPosition, setSearchPosition] = useState<string>("");
 
+  // 1. Fetch data paket ASLI dari database Supabase (Active only)
+  const fetchActivePackages = useCallback(async () => {
+    setIsLoadingPackages(true);
+    try {
+      const { data, error } = await supabase
+        .from("packages")
+        .select("*")
+        .eq("is_active", true)
+        .order("agency_name", { ascending: true });
+
+      if (error) throw error;
+      setPackages((data as PackageRecord[]) || []);
+    } catch {
+      // Tangani kesalahan fetch dengan graceful
+      setPackages([]);
+    } finally {
+      setIsLoadingPackages(false);
+    }
+  }, []);
+
+  // 2. Verifikasi auth dan inisialisasi load
   useEffect(() => {
     let isMounted = true;
 
-    async function checkAuthAndLoadPreferences() {
-      // 1. Verifikasi autentikasi sesi Supabase murni
+    async function checkAuthAndLoadData() {
       const {
         data: { user: authUser },
         error: authError,
@@ -90,34 +117,111 @@ export default function DashboardPage() {
           package: "bundling-skb",
           isLoggedIn: true,
         });
-
-        // Restore saved selections
-        if (typeof window !== "undefined") {
-          const savedAgency = localStorage.getItem("skb_selected_agency");
-          const savedPos = localStorage.getItem("skb_selected_position");
-          const savedPkg = localStorage.getItem("skb_selected_package_key") as any;
-
-          if (savedAgency) setSelectedAgencyId(savedAgency);
-          if (savedPos) setSelectedPositionId(savedPos);
-          if (savedPkg && ["paket-1", "paket-2", "paket-3", "bundling"].includes(savedPkg)) {
-            setSelectedPackageKey(savedPkg);
-          }
-        }
       }
+
+      await fetchActivePackages();
     }
 
-    checkAuthAndLoadPreferences();
+    checkAuthAndLoadData();
 
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [router, fetchActivePackages]);
+
+  // 3. Kelompokkan (Group) data paket ASLI berdasarkan Nama Instansi & Formasi Jabatan
+  const groupedAgencies: AgencyGroup[] = useMemo(() => {
+    if (!packages || packages.length === 0) return [];
+
+    const agencyMap = new Map<string, Map<string, PackageRecord[]>>();
+
+    packages.forEach((pkg) => {
+      const agencyName = (pkg.agency_name || "Instansi Lain").trim();
+      const positionTitle = (pkg.position_title || "Umum").trim();
+
+      if (!agencyMap.has(agencyName)) {
+        agencyMap.set(agencyName, new Map<string, PackageRecord[]>());
+      }
+      const posMap = agencyMap.get(agencyName)!;
+
+      if (!posMap.has(positionTitle)) {
+        posMap.set(positionTitle, []);
+      }
+      posMap.get(positionTitle)!.push(pkg);
+    });
+
+    const result: AgencyGroup[] = [];
+
+    agencyMap.forEach((posMap, agencyName) => {
+      const agencySlug = agencyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      const positions: PositionGroup[] = [];
+
+      posMap.forEach((pkgs, positionTitle) => {
+        // Urutkan paket berdasarkan nomor paket
+        pkgs.sort((a, b) => a.package_number - b.package_number);
+
+        const posSlug = `${agencySlug}-${positionTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")}`;
+
+        positions.push({
+          id: posSlug,
+          title: positionTitle,
+          agencyName: agencyName,
+          packages: pkgs,
+          totalQuestions: pkgs[0]?.total_questions || 100,
+          durationMinutes: pkgs[0]?.duration_minutes || 90,
+        });
+      });
+
+      result.push({
+        id: agencySlug,
+        name: agencyName,
+        positions,
+      });
+    });
+
+    return result;
+  }, [packages]);
+
+  // 4. Sinkronisasi pilihan instansi dan formasi pertama saat data termuat
+  useEffect(() => {
+    if (groupedAgencies.length === 0) return;
+
+    // Cek apakah ada riwayat pilihan tersimpan
+    const savedAgency = typeof window !== "undefined" ? localStorage.getItem("skb_selected_agency") : null;
+    const savedPos = typeof window !== "undefined" ? localStorage.getItem("skb_selected_position") : null;
+    const savedPkg = typeof window !== "undefined" ? (localStorage.getItem("skb_selected_package_key") as "paket-1" | "paket-2" | "paket-3" | "bundling" | null) : null;
+
+    if (savedPkg && ["paket-1", "paket-2", "paket-3", "bundling"].includes(savedPkg)) {
+      setSelectedPackageKey(savedPkg);
+    }
+
+    // Cari instansi yang cocok atau pilih instansi pertama
+    const foundAgency = groupedAgencies.find((a) => a.id === savedAgency || a.name.toLowerCase() === savedAgency?.toLowerCase());
+    const targetAgency = foundAgency || groupedAgencies[0];
+
+    setSelectedAgencyId(targetAgency.id);
+
+    // Cari jabatan yang cocok dalam instansi tersebut atau pilih jabatan pertama
+    const foundPos = targetAgency.positions.find((p) => p.id === savedPos || p.title.toLowerCase() === savedPos?.toLowerCase());
+    const targetPos = foundPos || targetAgency.positions[0];
+
+    if (targetPos) {
+      setSelectedPositionId(targetPos.id);
+    }
+  }, [groupedAgencies]);
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
     } catch {
-      // Sesi logout bersih
+      // Logout aman
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("skb_mock_user");
@@ -127,14 +231,12 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  // Resolve current active agency
+  // Instansi aktif terpilih
   const currentAgency = useMemo(() => {
-    return (
-      AGENCIES_DATA.find((a) => a.id === selectedAgencyId) || AGENCIES_DATA[0]
-    );
-  }, [selectedAgencyId]);
+    return groupedAgencies.find((a) => a.id === selectedAgencyId) || groupedAgencies[0] || null;
+  }, [groupedAgencies, selectedAgencyId]);
 
-  // Resolve current active position
+  // Formasi aktif terpilih
   const currentPosition = useMemo(() => {
     if (!currentAgency) return null;
     return (
@@ -144,48 +246,39 @@ export default function DashboardPage() {
     );
   }, [currentAgency, selectedPositionId]);
 
-  // 4 Standard Packages for current position
+  // 4 Kotak Pilihan Paket untuk jabatan terpilih
   const packageBoxes: PositionPackage[] = useMemo(() => {
-    return getPositionPackages(currentPosition?.title || "Jabatan SKB");
+    if (!currentPosition) return [];
+    return getPositionPackages(currentPosition.title);
   }, [currentPosition]);
 
-  // Filtered agencies based on search
+  // Filtered agencies based on search query
   const filteredAgencies = useMemo(() => {
-    if (!searchAgency.trim()) return AGENCIES_DATA;
+    if (!searchAgency.trim()) return groupedAgencies;
     const q = searchAgency.toLowerCase();
-    return AGENCIES_DATA.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.shortName.toLowerCase().includes(q) ||
-        a.description.toLowerCase().includes(q)
-    );
-  }, [searchAgency]);
+    return groupedAgencies.filter((a) => a.name.toLowerCase().includes(q));
+  }, [groupedAgencies, searchAgency]);
 
-  // Filtered positions for current agency based on search
+  // Filtered positions based on search query
   const filteredPositions = useMemo(() => {
     if (!currentAgency) return [];
     if (!searchPosition.trim()) return currentAgency.positions;
     const q = searchPosition.toLowerCase();
-    return currentAgency.positions.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q)
-    );
+    return currentAgency.positions.filter((p) => p.title.toLowerCase().includes(q));
   }, [currentAgency, searchPosition]);
 
-  // Handlers for selection
+  // Handlers seleksi
   const handleSelectAgency = (agencyId: string) => {
     setSelectedAgencyId(agencyId);
-    const agency = AGENCIES_DATA.find((a) => a.id === agencyId);
+    const agency = groupedAgencies.find((a) => a.id === agencyId);
     if (agency && agency.positions.length > 0) {
       setSelectedPositionId(agency.positions[0].id);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("skb_selected_position", agency.positions[0].id);
+      }
     }
     if (typeof window !== "undefined") {
       localStorage.setItem("skb_selected_agency", agencyId);
-      if (agency && agency.positions.length > 0) {
-        localStorage.setItem("skb_selected_position", agency.positions[0].id);
-      }
     }
   };
 
@@ -210,14 +303,13 @@ export default function DashboardPage() {
     const chosenPackage = packageBoxes.find((p) => p.packageKey === selectedPackageKey);
     if (!chosenPackage) return;
 
-    // Simpan order preview ke localStorage
     const pendingOrder = {
       agencyId: currentAgency.id,
       agencyName: currentAgency.name,
-      agencyShortName: currentAgency.shortName,
+      agencyShortName: currentAgency.name,
       positionId: currentPosition.id,
       positionTitle: currentPosition.title,
-      positionCode: currentPosition.code,
+      positionCode: currentPosition.id.toUpperCase(),
       packageKey: chosenPackage.packageKey,
       packageName: chosenPackage.name,
       packageLabel: chosenPackage.label,
@@ -231,30 +323,11 @@ export default function DashboardPage() {
       localStorage.setItem("skb_pending_order", JSON.stringify(pendingOrder));
     }
 
-    // Arahkan ke Halaman Simulasi Pembayaran
     router.push("/payment");
   };
 
-  // Helper icon for agency
-  const renderAgencyIcon = (type: AgencyItem["iconType"]) => {
-    switch (type) {
-      case "health":
-        return <HeartPulse className="w-5 h-5 text-[#FB6E09]" />;
-      case "finance":
-        return <Wallet className="w-5 h-5 text-[#FB6E09]" />;
-      case "justice":
-        return <Scale className="w-5 h-5 text-[#FB6E09]" />;
-      case "education":
-        return <GraduationCap className="w-5 h-5 text-[#FB6E09]" />;
-      case "law":
-        return <Shield className="w-5 h-5 text-[#FB6E09]" />;
-      default:
-        return <Building2 className="w-5 h-5 text-[#FB6E09]" />;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#FCF4E7] flex flex-col">
+    <div className="min-h-screen bg-[#FCF4E7] flex flex-col font-sans">
       {/* Top Navbar Dashboard */}
       <header className="sticky top-0 z-30 bg-[#FCF4E7]/90 backdrop-blur-md border-b-2 border-[#F0DCBE]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -302,7 +375,7 @@ export default function DashboardPage() {
               Selamat Datang, {user.name}!
             </h1>
             <p className="text-blue-100 text-xs sm:text-sm max-w-xl font-medium">
-              Tentukan <strong>Instansi</strong> dan <strong>Jabatan Formasi</strong>, lalu pilih paket soal yang Anda butuhkan (Paket 1, Paket 2, Paket 3, atau Paket Bundling).
+              Pilih <strong>Instansi</strong> dan <strong>Jabatan Formasi</strong>, lalu tentukan paket soal yang Anda butuhkan (Paket 1, Paket 2, Paket 3, atau Paket Bundling Hemat).
             </p>
           </div>
 
@@ -340,7 +413,7 @@ export default function DashboardPage() {
                   Pilih Instansi, Jabatan, &amp; 4 Pilihan Paket Ujian
                 </h2>
                 <p className="text-xs sm:text-sm text-[#042E64]/70 font-medium mt-1">
-                  Pilih salah satu dari 4 kotak paket (Paket 1, Paket 2, Paket 3, atau Paket Bundling), kemudian klik tombol &quot;Lanjutkan&quot; untuk simulasi pembayaran.
+                  Pilih salah satu dari 4 opsi paket (Paket 1, Paket 2, Paket 3, atau Paket Bundling), kemudian klik tombol &quot;Lanjutkan ke Pembayaran&quot;.
                 </p>
               </div>
 
@@ -362,7 +435,7 @@ export default function DashboardPage() {
           </div>
 
           {/* --------------------------------------------------------------------- */}
-          {/* LANGKAH 1: PILIH INSTANSI                                             */}
+          {/* LANGKAH 1: PILIH INSTANSI (PRINSIP KISS & MINIMALIS)                  */}
           {/* --------------------------------------------------------------------- */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -391,180 +464,187 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Grid Kartu Instansi */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredAgencies.map((agency) => {
-                const isSelected = agency.id === selectedAgencyId;
-                return (
+            {/* Grid Kartu Instansi (Prinsip KISS: Icon, Nama Instansi, Teks 'X Formasi Jabatan') */}
+            {isLoadingPackages ? (
+              <div className="bg-white rounded-3xl p-10 border-2 border-[#F0DCBE] text-center space-y-3">
+                <div className="w-7 h-7 border-3 border-[#FB6E09] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs font-bold text-[#042E64]">Memuat daftar instansi dari database...</p>
+              </div>
+            ) : filteredAgencies.length === 0 ? (
+              <div className="bg-white rounded-3xl p-8 border-2 border-[#F0DCBE] text-center space-y-3">
+                <p className="text-xs sm:text-sm font-bold text-[#042E64]">
+                  {searchAgency
+                    ? `Tidak ditemukan instansi dengan nama "${searchAgency}".`
+                    : "Belum ada paket soal aktif di database. Silakan tambahkan paket melalui Panel Admin."}
+                </p>
+                {searchAgency && (
                   <button
-                    key={agency.id}
                     type="button"
-                    onClick={() => handleSelectAgency(agency.id)}
-                    className={`text-left p-5 rounded-3xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
-                      isSelected
-                        ? "bg-[#042E64] text-white border-[#FB6E09] shadow-lg shadow-[#042E64]/20 ring-2 ring-[#FB6E09]"
-                        : "bg-white text-[#042E64] border-[#F0DCBE] hover:border-[#FB6E09]/60 hover:shadow-md"
-                    }`}
+                    onClick={() => setSearchAgency("")}
+                    className="text-xs font-black text-[#FB6E09] underline cursor-pointer"
                   >
-                    {isSelected && (
-                      <span className="absolute top-0 right-0 bg-[#FB6E09] text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
-                        <Check className="w-3 h-3 stroke-[3]" /> Terpilih
-                      </span>
-                    )}
-
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
+                    Reset Pencarian
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredAgencies.map((agency) => {
+                  const isSelected = agency.id === selectedAgencyId;
+                  return (
+                    <button
+                      key={agency.id}
+                      type="button"
+                      onClick={() => handleSelectAgency(agency.id)}
+                      className={`text-left p-5 sm:p-6 rounded-3xl border-2 transition-all cursor-pointer relative overflow-hidden flex items-center justify-between gap-4 group ${
+                        isSelected
+                          ? "bg-[#042E64] text-white border-[#FB6E09] shadow-lg shadow-[#042E64]/20 ring-2 ring-[#FB6E09]"
+                          : "bg-white text-[#042E64] border-[#F0DCBE] hover:border-[#FB6E09]/60 hover:shadow-md"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        {/* Icon Instansi */}
                         <div
-                          className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-colors ${
                             isSelected
-                              ? "bg-white/10 border-white/20"
-                              : "bg-[#FCF4E7] border-[#F0DCBE]"
+                              ? "bg-[#FB6E09] text-white border-[#FB6E09] shadow-xs"
+                              : "bg-[#FCF4E7] text-[#FB6E09] border-[#F0DCBE] group-hover:bg-[#FB6E09]/15"
                           }`}
                         >
-                          {renderAgencyIcon(agency.iconType)}
+                          <Building2 className="w-6 h-6" />
                         </div>
-                        <div>
-                          <span
-                            className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                              isSelected
-                                ? "bg-[#FB6E09]/30 text-[#FB6E09]"
-                                : "bg-[#FB6E09]/10 text-[#FB6E09]"
+
+                        {/* Nama Instansi & Teks 'X Formasi Jabatan' */}
+                        <div className="min-w-0">
+                          <h4 className="text-base font-black leading-snug truncate">
+                            {agency.name}
+                          </h4>
+                          <p
+                            className={`text-xs font-semibold mt-0.5 ${
+                              isSelected ? "text-blue-200" : "text-slate-500"
                             }`}
                           >
-                            {agency.badge}
-                          </span>
-                          <h4 className="text-base font-black leading-tight mt-1">
-                            {agency.shortName}
-                          </h4>
+                            {agency.positions.length} Formasi Jabatan
+                          </p>
                         </div>
                       </div>
 
-                      <p
-                        className={`text-xs line-clamp-2 leading-relaxed font-medium ${
-                          isSelected ? "text-blue-100" : "text-[#042E64]/70"
-                        }`}
-                      >
-                        {agency.description}
-                      </p>
-                    </div>
-
-                    <div
-                      className={`mt-4 pt-3 border-t flex items-center justify-between text-xs font-bold ${
-                        isSelected ? "border-blue-900/80 text-[#FB6E09]" : "border-[#F0DCBE] text-[#042E64]"
-                      }`}
-                    >
-                      <span>{agency.positions.length} Formasi Jabatan</span>
-                      <span className="flex items-center gap-1">
-                        Pilih Formasi <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                      {/* Indikator Terpilih / Arah */}
+                      <div className="shrink-0 flex items-center">
+                        {isSelected ? (
+                          <span className="w-7 h-7 rounded-full bg-[#FB6E09] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                            <Check className="w-4 h-4 stroke-[3]" />
+                          </span>
+                        ) : (
+                          <span className="w-7 h-7 rounded-full bg-[#FCF4E7] text-[#042E64]/60 flex items-center justify-center text-xs group-hover:text-[#FB6E09] group-hover:bg-amber-100 transition-colors">
+                            <ChevronRight className="w-4 h-4" />
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* --------------------------------------------------------------------- */}
           {/* LANGKAH 2: PILIH JABATAN / FORMASI                                    */}
           {/* --------------------------------------------------------------------- */}
-          <div className="space-y-4 pt-4 border-t-2 border-[#F0DCBE]">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg sm:text-xl font-black text-[#042E64] flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-xl bg-[#042E64] text-white flex items-center justify-center text-xs font-black">
-                    2
-                  </span>
-                  Pilih Jabatan Formasi ({currentAgency.shortName})
-                </h3>
-                <p className="text-xs text-[#042E64]/70 font-medium">
-                  Pilih jabatan yang Anda lamar di {currentAgency.name} untuk menampilkan 4 kotak paket soal.
-                </p>
+          {currentAgency && (
+            <div className="space-y-4 pt-4 border-t-2 border-[#F0DCBE]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-[#042E64] flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-xl bg-[#042E64] text-white flex items-center justify-center text-xs font-black">
+                      2
+                    </span>
+                    Pilih Jabatan Formasi ({currentAgency.name})
+                  </h3>
+                  <p className="text-xs text-[#042E64]/70 font-medium">
+                    Pilih jabatan yang Anda lamar di {currentAgency.name} untuk menampilkan 4 opsi paket soal.
+                  </p>
+                </div>
+
+                {/* Search Box Jabatan */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-[#042E64]/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchPosition}
+                    onChange={(e) => setSearchPosition(e.target.value)}
+                    placeholder={`Cari jabatan di ${currentAgency.name}...`}
+                    className="w-full pl-9 pr-3.5 py-2 text-xs border-2 border-[#F0DCBE] rounded-xl bg-white text-[#042E64] placeholder-[#042E64]/40 focus:outline-none focus:ring-2 focus:ring-[#FB6E09] font-medium"
+                  />
+                </div>
               </div>
 
-              {/* Search Box Jabatan */}
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-[#042E64]/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchPosition}
-                  onChange={(e) => setSearchPosition(e.target.value)}
-                  placeholder={`Cari jabatan di ${currentAgency.shortName}...`}
-                  className="w-full pl-9 pr-3.5 py-2 text-xs border-2 border-[#F0DCBE] rounded-xl bg-white text-[#042E64] placeholder-[#042E64]/40 focus:outline-none focus:ring-2 focus:ring-[#FB6E09] font-medium"
-                />
-              </div>
-            </div>
-
-            {/* List Kartu Jabatan */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredPositions.map((pos) => {
-                const isSelected = pos.id === selectedPositionId;
-                return (
-                  <button
-                    key={pos.id}
-                    type="button"
-                    onClick={() => handleSelectPosition(pos.id)}
-                    className={`text-left p-5 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? "bg-[#042E64] text-white border-[#FB6E09] shadow-md ring-2 ring-[#FB6E09]"
-                        : "bg-white text-[#042E64] border-[#F0DCBE] hover:border-[#FB6E09]/60 hover:shadow-md"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span
-                          className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
-                            isSelected
-                              ? "bg-[#FB6E09] text-white"
-                              : "bg-[#FB6E09]/10 text-[#FB6E09] border border-[#FB6E09]/30"
-                          }`}
-                        >
-                          {pos.level} • {pos.code}
-                        </span>
-                        <span
-                          className={`text-xs font-bold flex items-center gap-1 ${
-                            isSelected ? "text-amber-300" : "text-[#FB6E09]"
-                          }`}
-                        >
-                          <Award className="w-3.5 h-3.5" /> Passing Grade: {pos.passingScore}
-                        </span>
-                      </div>
-
-                      <h4 className="text-base font-black leading-snug">{pos.title}</h4>
-                      <p
-                        className={`text-xs mt-1.5 leading-relaxed font-medium ${
-                          isSelected ? "text-blue-100" : "text-[#042E64]/70"
-                        }`}
-                      >
-                        {pos.description}
-                      </p>
-                    </div>
-
-                    <div
-                      className={`mt-4 pt-3 border-t flex items-center justify-between text-xs font-bold ${
-                        isSelected ? "border-blue-900/80 text-blue-200" : "border-[#F0DCBE] text-[#042E64]/70"
+              {/* List Kartu Jabatan Dinamis */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredPositions.map((pos) => {
+                  const isSelected = pos.id === selectedPositionId;
+                  return (
+                    <button
+                      key={pos.id}
+                      type="button"
+                      onClick={() => handleSelectPosition(pos.id)}
+                      className={`text-left p-5 sm:p-6 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-[#042E64] text-white border-[#FB6E09] shadow-md ring-2 ring-[#FB6E09]"
+                          : "bg-white text-[#042E64] border-[#F0DCBE] hover:border-[#FB6E09]/60 hover:shadow-md"
                       }`}
                     >
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#FB6E09]" /> 100 Menit (110 Soal)
-                      </span>
-                      <span
-                        className={`font-black flex items-center gap-1 ${
-                          isSelected ? "text-[#FB6E09]" : "text-[#042E64]"
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              isSelected
+                                ? "bg-[#FB6E09] text-white"
+                                : "bg-[#FB6E09]/10 text-[#FB6E09] border border-[#FB6E09]/30"
+                            }`}
+                          >
+                            Formasi SKB
+                          </span>
+                          <span
+                            className={`text-xs font-bold ${
+                              isSelected ? "text-blue-200" : "text-slate-500"
+                            }`}
+                          >
+                            {pos.packages.length} Paket Latihan Tersedia
+                          </span>
+                        </div>
+
+                        <h4 className="text-base sm:text-lg font-black leading-snug">{pos.title}</h4>
+                      </div>
+
+                      <div
+                        className={`mt-4 pt-3 border-t flex items-center justify-between text-xs font-bold ${
+                          isSelected ? "border-blue-900/80 text-blue-200" : "border-[#F0DCBE] text-[#042E64]/70"
                         }`}
                       >
-                        {isSelected ? "✓ Jabatan Terpilih" : "Pilih Jabatan →"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#FB6E09]" />
+                          <span>{pos.durationMinutes} Menit • {pos.totalQuestions} Soal</span>
+                        </span>
+                        <span
+                          className={`font-black flex items-center gap-1 ${
+                            isSelected ? "text-[#FB6E09]" : "text-[#042E64]"
+                          }`}
+                        >
+                          {isSelected ? "✓ Jabatan Terpilih" : "Pilih Jabatan →"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* --------------------------------------------------------------------- */}
           {/* LANGKAH 3: 4 KOTAK SEJAJAR / BERURUTAN & TOMBOL "LANJUTKAN"           */}
           {/* --------------------------------------------------------------------- */}
-          {currentPosition && (
+          {currentPosition && currentAgency && (
             <div className="space-y-6 pt-4 border-t-2 border-[#F0DCBE]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -581,9 +661,7 @@ export default function DashboardPage() {
 
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border-2 border-[#F0DCBE] text-xs font-bold text-[#042E64] shrink-0">
                   <Briefcase className="w-4 h-4 text-[#FB6E09]" />
-                  <span>{currentAgency.shortName}</span>
-                  <span>•</span>
-                  <span className="text-[#FB6E09] font-black">{currentPosition.code}</span>
+                  <span>{currentAgency.name}</span>
                 </div>
               </div>
 
@@ -640,7 +718,6 @@ export default function DashboardPage() {
                           </span>
                         </div>
 
-                        {/* Isi / Sub-Judul: SKB Formasi (Ganti 'Paket 1', 'Paket 2', dll. menjadi ini) */}
                         <div
                           className={`text-lg font-black leading-tight ${
                             isBundling ? "text-white" : "text-[#042E64]"
@@ -655,7 +732,6 @@ export default function DashboardPage() {
                           </div>
                         )}
 
-                        {/* Keterangan kecil (Deskripsi) */}
                         <p
                           className={`text-xs leading-relaxed font-medium ${
                             isBundling ? "text-blue-100" : "text-[#042E64]/70"
@@ -664,7 +740,7 @@ export default function DashboardPage() {
                           {pkg.description}
                         </p>
 
-                        {/* Harga: Efek harga coret, lalu tampilkan harga promo */}
+                        {/* Harga */}
                         <div
                           className={`py-3.5 my-2 border-y ${
                             isBundling ? "border-blue-900/80 bg-white/5 rounded-2xl px-3.5" : "border-[#F0DCBE] bg-[#FCF4E7]/40 rounded-2xl px-3.5"
@@ -700,7 +776,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        {/* Fasilitas / Kriteria di bawah harga (3 Poin Centang Sesuai Permintaan) */}
+                        {/* Fasilitas Paket */}
                         <div className="space-y-2 pt-1">
                           <div
                             className={`text-[11px] font-black uppercase tracking-wider ${
@@ -755,7 +831,7 @@ export default function DashboardPage() {
                     {packageBoxes.find((p) => p.packageKey === selectedPackageKey)?.name}
                   </div>
                   <div className="text-xs text-[#042E64]/75 font-medium">
-                    Formasi: <strong>{currentPosition.title}</strong> ({currentAgency.shortName}) • Total Tagihan:{" "}
+                    Formasi: <strong>{currentPosition.title}</strong> ({currentAgency.name}) • Total Tagihan:{" "}
                     <span className="text-[#FB6E09] font-black text-sm">
                       Rp{packageBoxes.find((p) => p.packageKey === selectedPackageKey)?.price.toLocaleString("id-ID")}
                     </span>
@@ -784,7 +860,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <strong className="font-black text-[#042E64] text-sm">Tips Pemilihan Paket SIKILAT:</strong>
             <p className="text-[#042E64]/80 leading-relaxed font-medium">
-              Pilih <strong>Paket Bundling</strong> jika Anda ingin menguasai seluruh materi (Paket 1, Paket 2, dan Paket 3) secara komprehensif dengan harga promo hemat 25%. Setelah menekan tombol <strong>&quot;Lanjutkan&quot;</strong>, Anda akan diarahkan ke halaman simulasi struk pembayaran resmi.
+              Pilih <strong>Paket Bundling</strong> jika Anda ingin menguasai seluruh materi (Paket 1, Paket 2, dan Paket 3) secara komprehensif dengan harga promo hemat 25%. Setelah menekan tombol <strong>&quot;Lanjutkan ke Pembayaran&quot;</strong>, Anda akan diarahkan ke halaman simulasi pembayaran resmi.
             </p>
           </div>
         </div>

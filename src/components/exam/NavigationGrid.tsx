@@ -14,7 +14,7 @@ interface NavigationGridProps {
 }
 
 function getNavBoxStyle(
-  questionId: number,
+  questionId: string | number,
   index: number,
   currentIndex: number,
   answers: UserAnswersMap,
@@ -59,7 +59,7 @@ export default function NavigationGrid({
             </h3>
           </div>
           <span className="text-xs font-bold text-slate-500">
-            Total: 100 Soal
+            Total: {questions.length} Soal
           </span>
         </div>
 

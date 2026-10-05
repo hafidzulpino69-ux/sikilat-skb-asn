@@ -14,7 +14,7 @@ interface MobileGridDrawerProps {
 }
 
 function getNavBoxStyle(
-  questionId: number,
+  questionId: string | number,
   index: number,
   currentIndex: number,
   answers: UserAnswersMap,
@@ -56,7 +56,7 @@ export default function MobileGridDrawer({
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-[#FB6E09]" />
               <h3 className="text-sm font-black text-[#042E64]">
-                Nomor Soal (1 - 100)
+                Nomor Soal (1 - {questions.length})
               </h3>
             </div>
             <button

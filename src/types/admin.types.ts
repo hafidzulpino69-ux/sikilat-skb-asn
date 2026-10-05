@@ -35,3 +35,30 @@ export interface CSVParseValidation {
   validRows: Omit<QuestionRecord, "id">[];
   invalidRows: { rowNumber: number; reason: string }[];
 }
+
+export interface PackageRecord {
+  id: string;
+  slug: string;
+  title: string;
+  agency_name: string;
+  position_title: string;
+  package_number: number;
+  total_questions: number;
+  duration_minutes: number;
+  max_score: number;
+  is_active: boolean;
+  created_at?: string;
+  question_count?: number;
+}
+
+export interface PackageFormData {
+  title: string;
+  slug: string;
+  agency_name: string;
+  position_title: string;
+  package_number: number;
+  total_questions: number;
+  duration_minutes: number;
+  max_score: number;
+  is_active: boolean;
+}

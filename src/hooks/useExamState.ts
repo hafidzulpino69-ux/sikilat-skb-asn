@@ -45,8 +45,8 @@ export function useExamState({
   const [doubtfulQuestions, setDoubtfulQuestions] = useState<DoubtfulQuestionsMap>(initialDoubtful);
 
   const currentQuestion = questions[currentIndex] || questions[0];
-  const currentSelectedOption = answers[currentQuestion.id];
-  const isCurrentDoubtful = !!doubtfulQuestions[currentQuestion.id];
+  const currentSelectedOption = currentQuestion ? answers[currentQuestion.id] : undefined;
+  const isCurrentDoubtful = currentQuestion ? !!doubtfulQuestions[currentQuestion.id] : false;
 
   // Statistik jawaban real-time
   const stats = useMemo<ExamStats>(() => {
@@ -71,30 +71,32 @@ export function useExamState({
   }, [answers, doubtfulQuestions, questions]);
 
   const handleSelectOption = useCallback((key: AnswerKey) => {
-    if (isFinished) return;
+    if (isFinished || !currentQuestion) return;
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: key }));
-  }, [isFinished, currentQuestion.id]);
+  }, [isFinished, currentQuestion]);
 
   const handleToggleDoubtful = useCallback(() => {
-    if (isFinished) return;
+    if (isFinished || !currentQuestion) return;
     setDoubtfulQuestions((prev) => ({
       ...prev,
       [currentQuestion.id]: !prev[currentQuestion.id],
     }));
-  }, [isFinished, currentQuestion.id]);
+  }, [isFinished, currentQuestion]);
 
   const handlePrevQuestion = useCallback(() => {
     if (currentIndex > 0) setCurrentIndex((prev) => prev - 1);
   }, [currentIndex]);
 
+  const effectiveTotal = totalQuestions || questions.length;
+
   const handleSaveAndNext = useCallback((): boolean => {
     if (isFinished) return false;
-    if (currentIndex < totalQuestions - 1) {
+    if (currentIndex < effectiveTotal - 1) {
       setCurrentIndex((prev) => prev + 1);
       return false;
     }
     return true; // at last question, caller should show finish modal
-  }, [isFinished, currentIndex, totalQuestions]);
+  }, [isFinished, currentIndex, effectiveTotal]);
 
   const handleJumpToQuestion = useCallback((index: number) => {
     setCurrentIndex(index);

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DUMMY_EXAM_QUESTIONS } from "@/data/dummyExamQuestions";
-import { EXAM_DURATION_SECONDS, TOTAL_QUESTIONS } from "@/constants";
+import { Layers } from "lucide-react";
+import { EXAM_DURATION_SECONDS } from "@/constants";
 import { useExamTimer, useExamState, useAutosave } from "@/hooks";
 import {
   calculateScore,
@@ -11,7 +11,7 @@ import {
   saveLastExamResult,
 } from "@/utils";
 import { supabase } from "@/utils/supabaseClient";
-import type { FontSizePreference } from "@/types";
+import type { FontSizePreference, ExamQuestion, AnswerKey } from "@/types";
 
 import {
   ExamHeader,
@@ -55,6 +55,11 @@ function ExamEngineContent() {
   // Data Peserta
   const [userName, setUserName] = useState("Peserta Simulasi CAT");
 
+  // Dynamic Questions from Database
+  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState<boolean>(true);
+  const [noQuestionsError, setNoQuestionsError] = useState<boolean>(false);
+
   // UI State
   const [isFinished, setIsFinished] = useState(false);
   const isFinishedRef = useRef(false);
@@ -64,7 +69,6 @@ function ExamEngineContent() {
   const [fontSize, setFontSize] = useState<FontSizePreference>("normal");
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const questions = DUMMY_EXAM_QUESTIONS;
 
   // =========================================================================
   // Resolve UUID paket dari Supabase jika belum berbentuk UUID
@@ -83,17 +87,20 @@ function ExamEngineContent() {
       }
 
       try {
-        const targetNumber =
-          cardIdParam.includes("2") || packageTitleParam.includes("Paket 2")
-            ? 2
-            : cardIdParam.includes("3") || packageTitleParam.includes("Paket 3")
-            ? 3
-            : 1;
+        let query = supabase.from("packages").select("id");
+        if (packageIdParam) {
+          query = query.or(`slug.eq.${packageIdParam},id.eq.${packageIdParam}`);
+        } else {
+          const targetNumber =
+            cardIdParam.includes("2") || packageTitleParam.includes("Paket 2")
+              ? 2
+              : cardIdParam.includes("3") || packageTitleParam.includes("Paket 3")
+              ? 3
+              : 1;
+          query = query.eq("package_number", targetNumber);
+        }
 
-        const { data } = await supabase
-          .from("packages")
-          .select("id")
-          .eq("package_number", targetNumber)
+        const { data } = await query
           .eq("is_active", true)
           .limit(1)
           .maybeSingle();
@@ -149,7 +156,7 @@ function ExamEngineContent() {
     initialDoubtful: restoredSession?.doubtfulQuestions,
     initialIndex: restoredSession?.currentIndex,
     isFinished,
-    totalQuestions: TOTAL_QUESTIONS,
+    totalQuestions: questions.length,
   });
 
   // =========================================================================
@@ -212,7 +219,44 @@ function ExamEngineContent() {
           }
         }
 
-        // Cari sesi ujian aktif yang belum selesai (is_finished = false) di Supabase
+        // 1. Ambil butir soal asli dari tabel questions di Supabase
+        const { data: dbQuestions, error: qErr } = await supabase
+          .from("questions")
+          .select("*")
+          .eq("package_id", resolvedPackageUuid)
+          .order("question_number", { ascending: true });
+
+        if (qErr || !dbQuestions || dbQuestions.length === 0) {
+          if (isMounted) {
+            setNoQuestionsError(true);
+            setIsLoadingQuestions(false);
+            setIsSupabaseSessionReady(true);
+          }
+          return;
+        }
+
+        const mappedQuestions: ExamQuestion[] = dbQuestions.map((q, idx) => ({
+          id: q.id || idx + 1,
+          questionNumber: q.question_number || idx + 1,
+          category: q.category || "SKB Khusus",
+          questionText: q.soal,
+          options: [
+            { key: "A", text: q.opsi_a },
+            { key: "B", text: q.opsi_b },
+            { key: "C", text: q.opsi_c },
+            { key: "D", text: q.opsi_d },
+            { key: "E", text: q.opsi_e },
+          ],
+          correctAnswer: (q.kunci_jawaban?.toUpperCase() || "A") as AnswerKey,
+          explanation: q.pembahasan || "",
+        }));
+
+        if (isMounted) {
+          setQuestions(mappedQuestions);
+          setIsLoadingQuestions(false);
+        }
+
+        // 2. Cari sesi ujian aktif yang belum selesai (is_finished = false) di Supabase
         const { data: ongoingSession } = await supabase
           .from("exam_results")
           .select("*")
@@ -234,7 +278,11 @@ function ExamEngineContent() {
             setDoubtfulQuestions(ongoingSession.doubtful_answers);
           }
           if (typeof ongoingSession.current_index === "number") {
-            setCurrentIndex(ongoingSession.current_index);
+            const safeIdx = Math.min(
+              ongoingSession.current_index,
+              mappedQuestions.length - 1
+            );
+            setCurrentIndex(Math.max(0, safeIdx));
           }
           if (typeof ongoingSession.seconds_left === "number" && ongoingSession.seconds_left > 0) {
             setSecondsLeft(ongoingSession.seconds_left);
@@ -252,7 +300,7 @@ function ExamEngineContent() {
                 score: 0,
                 correct_count: 0,
                 wrong_count: 0,
-                unanswered_count: TOTAL_QUESTIONS,
+                unanswered_count: mappedQuestions.length,
                 time_spent_seconds: 0,
                 seconds_left: EXAM_DURATION_SECONDS,
                 current_index: 0,
@@ -423,7 +471,7 @@ function ExamEngineContent() {
           highestScore: Math.max(highestScore, scoreResult.score),
           previousHighest,
           maxScore: scoreResult.maxScore,
-          totalQuestions: TOTAL_QUESTIONS,
+          totalQuestions: questions.length,
           correctCount: scoreResult.correctCount,
           wrongCount: scoreResult.wrongCount,
           unansweredCount: scoreResult.unansweredCount,
@@ -552,13 +600,39 @@ function ExamEngineContent() {
   );
 
   // Loading State
-  if (!isSessionLoaded || !isSupabaseSessionReady) {
+  if (!isSessionLoaded || !isSupabaseSessionReady || isLoadingQuestions) {
     return (
       <LoadingState
         fullScreen
         backgroundClassName="bg-[#F4F6F9]"
-        message="Menyiapkan lembar ujian CAT..."
+        message="Menyiapkan lembar ujian CAT dari database..."
       />
+    );
+  }
+
+  // Jika paket belum memiliki butir soal di database
+  if (noQuestionsError || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center border-2 border-slate-200 shadow-xl space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+            <Layers className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-black text-[#042E64]">Belum Ada Butir Soal</h2>
+          <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+            Paket ujian ini belum memiliki butir soal aktif di database. Silakan kembali ke daftar paket Anda atau hubungi Admin.
+          </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => router.push("/my-packages")}
+              className="w-full py-3 px-4 rounded-xl font-black text-sm text-white bg-[#042E64] hover:bg-[#0B3E84] transition-all cursor-pointer shadow-md"
+            >
+              Kembali ke Daftar Paket
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -580,7 +654,7 @@ function ExamEngineContent() {
         agencyName={agencyParam}
         userName={userName}
         currentIndex={currentIndex}
-        totalQuestions={TOTAL_QUESTIONS}
+        totalQuestions={questions.length}
         formattedTime={formattedTime}
         isWarning={isWarning}
         fontSize={fontSize}

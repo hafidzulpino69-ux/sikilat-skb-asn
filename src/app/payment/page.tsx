@@ -135,28 +135,40 @@ export default function PaymentPage() {
     for (const num of examNums) {
       const masterSlug = `${positionSlug}-paket-${num}`;
 
-      // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
-      const { data: pkgData, error: pkgError } = await supabase
+      // 1. Cek apakah master paket sudah ada di katalog packages (berdasarkan agency & formasi atau slug)
+      const { data: existingPkg } = await supabase
         .from("packages")
-        .upsert(
-          {
-            slug: masterSlug,
-            title: `Paket ${num}: SKB ${agencyShort}`,
-            agency_name: order.agencyName,
-            position_title: order.positionTitle,
-            package_number: num,
-            total_questions: 100,
-            duration_minutes: 90,
-            max_score: 500,
-            is_active: true,
-          },
-          { onConflict: "slug" }
-        )
         .select("id")
-        .single();
+        .or(`slug.eq."${masterSlug}",and(agency_name.eq."${order.agencyName}",position_title.eq."${order.positionTitle}",package_number.eq.${num})`)
+        .maybeSingle();
 
-      if (pkgError || !pkgData) {
-        throw pkgError || new Error("Gagal mendaftarkan master paket.");
+      let targetPackageId = existingPkg?.id;
+
+      if (!targetPackageId) {
+        // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
+        const { data: pkgData, error: pkgError } = await supabase
+          .from("packages")
+          .upsert(
+            {
+              slug: masterSlug,
+              title: `Paket ${num}: SKB ${agencyShort}`,
+              agency_name: order.agencyName,
+              position_title: order.positionTitle,
+              package_number: num,
+              total_questions: 100,
+              duration_minutes: 90,
+              max_score: 500,
+              is_active: true,
+            },
+            { onConflict: "slug" }
+          )
+          .select("id")
+          .single();
+
+        if (pkgError || !pkgData) {
+          throw pkgError || new Error("Gagal mendaftarkan master paket.");
+        }
+        targetPackageId = pkgData.id;
       }
 
       // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT
@@ -165,7 +177,7 @@ export default function PaymentPage() {
         .upsert(
           {
             user_id: user.id,
-            package_id: pkgData.id,
+            package_id: targetPackageId,
             expires_at: expiresAt,
             purchased_at: new Date().toISOString(),
           },
@@ -220,7 +232,7 @@ export default function PaymentPage() {
       const { data: matchedPackages } = await supabase
         .from("packages")
         .select("id, slug")
-        .in("slug", targetSlugs);
+        .or(`slug.in.(${targetSlugs.join(",")}),and(agency_name.eq."${order.agencyName}",position_title.eq."${order.positionTitle}")`);
 
       // Jika ada paket master yang cocok, cek ke user_packages untuk user ini
       if (matchedPackages && matchedPackages.length > 0) {
