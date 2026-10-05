@@ -83,21 +83,48 @@ alter table public.packages enable row level security;
 alter table public.user_packages enable row level security;
 alter table public.exam_results enable row level security;
 
--- Policies untuk public.packages (Katalog Master)
+-- Policies untuk public.packages (Katalog Master Bersama)
 drop policy if exists "packages_public_read" on public.packages;
-create policy "packages_public_read" on public.packages for select to anon, authenticated using (is_active = true);
+create policy "packages_public_read" on public.packages 
+for select to anon, authenticated 
+using (is_active = true);
 
 drop policy if exists "packages_insert_auth" on public.packages;
 drop policy if exists "packages_dev_anon_insert" on public.packages;
-create policy "packages_insert_auth" on public.packages for insert to anon, authenticated with check (true);
+create policy "packages_insert_auth" on public.packages 
+for insert to authenticated 
+with check (auth.uid() is not null);
 
 drop policy if exists "packages_update_auth" on public.packages;
 drop policy if exists "packages_dev_anon_update" on public.packages;
-create policy "packages_update_auth" on public.packages for update to anon, authenticated using (true) with check (true);
+create policy "packages_update_admin" on public.packages 
+for update to authenticated 
+using (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+with check (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+drop policy if exists "packages_delete_admin" on public.packages;
+create policy "packages_delete_admin" on public.packages 
+for delete to authenticated 
+using (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
 
 -- Policies untuk public.user_packages (Kepemilikan per Akun)
 drop policy if exists "user_packages_select_own" on public.user_packages;
-create policy "user_packages_select_own" on public.user_packages for select to authenticated using (auth.uid() = user_id);
+create policy "user_packages_select_own" on public.user_packages 
+for select to authenticated 
+using (
+  auth.uid() = user_id
+  or (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
 
 drop policy if exists "user_packages_insert_own" on public.user_packages;
 create policy "user_packages_insert_own" on public.user_packages for insert to authenticated with check (auth.uid() = user_id);
@@ -118,7 +145,79 @@ create policy "exam_results_update_own" on public.exam_results for update to aut
 drop policy if exists "exam_results_delete_own" on public.exam_results;
 create policy "exam_results_delete_own" on public.exam_results for delete to authenticated using (auth.uid() = user_id);
 
--- 6. PAKSA POSTGREST ME-RELOAD SCHEMA CACHE SECARA INSTAN!
+-- 6. TABEL BUTIR SOAL UJIAN (BANK SOAL PER PAKET)
+create table if not exists public.questions (
+  id uuid primary key default gen_random_uuid(),
+  package_id uuid not null references public.packages(id) on delete cascade,
+  question_number integer not null default 1,
+  category text not null default 'SKB Khusus',
+  soal text not null,
+  opsi_a text not null,
+  opsi_b text not null,
+  opsi_c text not null,
+  opsi_d text not null,
+  opsi_e text not null,
+  kunci_jawaban text not null check (kunci_jawaban in ('A', 'B', 'C', 'D', 'E')),
+  pembahasan text default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists questions_package_id_idx on public.questions (package_id);
+create index if not exists questions_number_idx on public.questions (package_id, question_number);
+
+-- Aktifkan Row Level Security (RLS) Sangat Ketat
+alter table public.questions enable row level security;
+
+-- POLICY 1 (SELECT):
+-- Peserta hanya bisa SELECT soal dari paket yang sudah dibeli (user_packages),
+-- ATAU jika yang membaca adalah Admin (adminsikilatskb@gmail.com / role admin)
+drop policy if exists "questions_select_policy" on public.questions;
+drop policy if exists "questions_select_all" on public.questions;
+create policy "questions_select_policy" on public.questions
+for select to authenticated
+using (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  or exists (
+    select 1 from public.user_packages up
+    where up.package_id = public.questions.package_id
+      and up.user_id = auth.uid()
+  )
+);
+
+-- POLICY 2 (INSERT): HANYA Admin terdaftar yang berhak melakukan Bulk Insert soal
+drop policy if exists "questions_insert_admin" on public.questions;
+create policy "questions_insert_admin" on public.questions
+for insert to authenticated
+with check (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+-- POLICY 3 (UPDATE): HANYA Admin yang berhak mengedit butir soal
+drop policy if exists "questions_update_admin" on public.questions;
+create policy "questions_update_admin" on public.questions
+for update to authenticated
+using (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+with check (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+-- POLICY 4 (DELETE): HANYA Admin yang berhak menghapus butir soal
+drop policy if exists "questions_delete_admin" on public.questions;
+create policy "questions_delete_admin" on public.questions
+for delete to authenticated
+using (
+  (auth.jwt() ->> 'email') in ('adminsikilatskb@gmail.com')
+  or (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+-- 7. PAKSA POSTGREST ME-RELOAD SCHEMA CACHE SECARA INSTAN!
 notify pgrst, 'reload schema';
 
 commit;
+

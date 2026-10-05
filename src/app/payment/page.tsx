@@ -55,82 +55,42 @@ export default function PaymentPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      // Ambil data user dari localStorage & Supabase Auth
-      const storedUser = localStorage.getItem("skb_mock_user");
-      if (storedUser) {
-        try {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.name) setUserName(parsed.name);
-          if (parsed.email) setUserEmail(parsed.email);
-        } catch (e) {
-          console.error(e);
+      // 1. Verifikasi autentikasi user
+      supabase.auth.getUser().then(({ data: { user }, error }) => {
+        if (error || !user) {
+          router.push("/login?redirect=/payment");
+          return;
         }
-      }
 
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          const userMeta = user.user_metadata || {};
-          const name = userMeta.full_name || user.email?.split("@")[0];
-          if (name) setUserName(name);
-          if (user.email) setUserEmail(user.email);
-        }
+        const userMeta = user.user_metadata || {};
+        const name = userMeta.full_name || user.email?.split("@")[0] || "Peserta SIKILAT";
+        setUserName(name);
+        if (user.email) setUserEmail(user.email);
       });
 
-      // Ambil data pending order dari dashboard
+      // 2. Ambil data pending order dari dashboard (tanpa fallback hardcode dummy)
       const storedOrder = localStorage.getItem("skb_pending_order");
       if (storedOrder) {
         try {
-          setOrder(JSON.parse(storedOrder));
-        } catch (e) {
-          console.error(e);
+          const parsed = JSON.parse(storedOrder);
+          if (parsed && parsed.price) {
+            setOrder(parsed);
+          } else {
+            router.push("/dashboard");
+          }
+        } catch {
+          router.push("/dashboard");
         }
       } else {
-        // Fallback default jika diakses langsung
-        setOrder({
-          agencyId: "kemenkes",
-          agencyName: "Kementerian Kesehatan RI",
-          agencyShortName: "Kemenkes",
-          positionId: "kemenkes-epidemiolog",
-          positionTitle: "Epidemiolog Kesehatan Ahli Pertama",
-          positionCode: "KMK-EPD-01",
-          packageKey: "bundling",
-          packageName: "Paket Bundling (Berisi Paket 1, 2, dan 3)",
-          packageLabel: "Paket Bundling",
-          price: 80000,
-          originalPrice: 105000,
-          examNumbers: [1, 2, 3],
-          createdAt: new Date().toISOString(),
-        });
+        // Jika tidak ada pesanan aktif, arahkan kembali ke pemilihan formasi
+        router.push("/dashboard");
       }
     }
-  }, []);
+  }, [router]);
 
-  // Helper pembongkar error PostgREST / Supabase
-  const formatErrorDetail = (error: unknown) => {
-    if (!error) return {};
-    if (typeof error === "object") {
-      const e = error as Record<string, unknown>;
-      return {
-        message: e.message || (error instanceof Error ? error.message : String(error)),
-        code: e.code,
-        details: e.details,
-        hint: e.hint,
-        ...e,
-      };
-    }
-    return { message: String(error) };
-  };
-
-  // Helper standarisasi penanganan error pembayaran
+  // Helper standarisasi penanganan error pembayaran yang aman (tanpa leak database)
   const handlePaymentError = (err: unknown) => {
-    console.error(
-      "Detail Error:",
-      JSON.stringify(formatErrorDetail(err), null, 2)
-    );
-    const formatted = formatErrorDetail(err);
-    const rawMsg =
-      (formatted.message as string) ||
-      (err instanceof Error ? err.message : "");
+    const rawMsg = err instanceof Error ? err.message : "";
 
     let userFriendlyMessage =
       "Gagal memproses pembayaran paket. Silakan periksa koneksi atau coba beberapa saat lagi.";
@@ -196,10 +156,6 @@ export default function PaymentPage() {
         .single();
 
       if (pkgError || !pkgData) {
-        console.error(
-          "Detail Error:",
-          JSON.stringify(formatErrorDetail(pkgError), null, 2)
-        );
         throw pkgError || new Error("Gagal mendaftarkan master paket.");
       }
 
@@ -217,10 +173,6 @@ export default function PaymentPage() {
         );
 
       if (userPkgError) {
-        console.error(
-          "Detail Error:",
-          JSON.stringify(formatErrorDetail(userPkgError), null, 2)
-        );
         throw userPkgError;
       }
     }
@@ -265,27 +217,19 @@ export default function PaymentPage() {
 
       // Cek apakah master packages untuk paket ini sudah pernah dibuat
       const targetSlugs = examNums.map((num) => `${positionSlug}-paket-${num}`);
-      const { data: matchedPackages, error: matchError } = await supabase
+      const { data: matchedPackages } = await supabase
         .from("packages")
         .select("id, slug")
         .in("slug", targetSlugs);
 
-      if (matchError) {
-        console.warn("Peringatan pengecekan katalog paket:", matchError);
-      }
-
       // Jika ada paket master yang cocok, cek ke user_packages untuk user ini
       if (matchedPackages && matchedPackages.length > 0) {
         const candidatePkgIds = matchedPackages.map((p) => p.id);
-        const { data: ownedList, error: ownedError } = await supabase
+        const { data: ownedList } = await supabase
           .from("user_packages")
           .select("package_id")
           .eq("user_id", user.id)
           .in("package_id", candidatePkgIds);
-
-        if (ownedError) {
-          console.warn("Peringatan pengecekan user_packages:", ownedError);
-        }
 
         if (ownedList && ownedList.length > 0) {
           // PAKET SUDAH DIMILIKI -> Tampilkan RepurchaseWarningModal
@@ -323,15 +267,11 @@ export default function PaymentPage() {
 
       // RESET PROGRES: Lakukan fungsi DELETE pada tabel exam_results
       if (repurchasePackageIds.length > 0) {
-        const { error: deleteError } = await supabase
+        await supabase
           .from("exam_results")
           .delete()
           .eq("user_id", user.id)
           .in("package_id", repurchasePackageIds);
-
-        if (deleteError) {
-          console.warn("Catatan reset exam_results:", deleteError);
-        }
 
         // Hapus cache autosave lokal jika ada
         if (typeof window !== "undefined") {

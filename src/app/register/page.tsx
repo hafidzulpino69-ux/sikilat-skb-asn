@@ -76,23 +76,12 @@ function RegisterForm() {
         // Simpan ke localStorage untuk profil frontend
         if (typeof window !== "undefined") {
           localStorage.setItem(
-            "skb_mock_user",
-            JSON.stringify({
-              id: data.user.id,
-              email: data.user.email,
-              name: displayName,
-              phone: phone.trim(),
-              package: selectedPackage || "bundling-skb",
-              isLoggedIn: true,
-              loginTime: new Date().toISOString(),
-            })
-          );
-
-          localStorage.setItem(
             "skb_user",
             JSON.stringify({
+              id: data.user.id,
               name: displayName,
               email: data.user.email,
+              phone: phone.trim(),
             })
           );
         }
@@ -108,7 +97,6 @@ function RegisterForm() {
         }
       }
     } catch (err: unknown) {
-      console.error("Gagal registrasi:", err);
       const msg =
         err instanceof Error
           ? err.message

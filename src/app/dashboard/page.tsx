@@ -37,6 +37,7 @@ import {
 import { supabase } from "@/utils/supabaseClient";
 
 interface UserData {
+  id?: string;
   name: string;
   email: string;
   package?: string;
@@ -64,34 +65,59 @@ export default function DashboardPage() {
   const [searchPosition, setSearchPosition] = useState<string>("");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("skb_mock_user");
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch (e) {
-          console.error(e);
+    let isMounted = true;
+
+    async function checkAuthAndLoadPreferences() {
+      // 1. Verifikasi autentikasi sesi Supabase murni
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !authUser) {
+        router.push("/login");
+        return;
+      }
+
+      if (isMounted) {
+        const meta = authUser.user_metadata || {};
+        const displayName = meta.full_name || authUser.email?.split("@")[0] || "Peserta SIKILAT";
+
+        setUser({
+          id: authUser.id,
+          name: displayName,
+          email: authUser.email || "",
+          package: "bundling-skb",
+          isLoggedIn: true,
+        });
+
+        // Restore saved selections
+        if (typeof window !== "undefined") {
+          const savedAgency = localStorage.getItem("skb_selected_agency");
+          const savedPos = localStorage.getItem("skb_selected_position");
+          const savedPkg = localStorage.getItem("skb_selected_package_key") as any;
+
+          if (savedAgency) setSelectedAgencyId(savedAgency);
+          if (savedPos) setSelectedPositionId(savedPos);
+          if (savedPkg && ["paket-1", "paket-2", "paket-3", "bundling"].includes(savedPkg)) {
+            setSelectedPackageKey(savedPkg);
+          }
         }
       }
-
-      // Restore saved selections
-      const savedAgency = localStorage.getItem("skb_selected_agency");
-      const savedPos = localStorage.getItem("skb_selected_position");
-      const savedPkg = localStorage.getItem("skb_selected_package_key") as any;
-
-      if (savedAgency) setSelectedAgencyId(savedAgency);
-      if (savedPos) setSelectedPositionId(savedPos);
-      if (savedPkg && ["paket-1", "paket-2", "paket-3", "bundling"].includes(savedPkg)) {
-        setSelectedPackageKey(savedPkg);
-      }
     }
-  }, []);
+
+    checkAuthAndLoadPreferences();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (e) {
-      console.error("Gagal logout:", e);
+    } catch {
+      // Sesi logout bersih
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("skb_mock_user");

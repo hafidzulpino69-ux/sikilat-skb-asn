@@ -21,15 +21,15 @@ export default function TermsPage() {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
   useEffect(() => {
-    // Membaca data mock user jika tersimpan
+    // Membaca data user profil jika tersimpan
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("skb_mock_user");
+      const stored = localStorage.getItem("skb_user");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           if (parsed.name) setUserName(parsed.name);
-        } catch (e) {
-          console.error(e);
+        } catch {
+          // Abaikan kesalahan parsing
         }
       }
     }

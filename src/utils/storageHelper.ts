@@ -44,8 +44,8 @@ export function saveAutosaveSession(
       lastSavedAt: new Date().toISOString(),
     };
     localStorage.setItem(getSessionKey(cardId), JSON.stringify(session));
-  } catch (e) {
-    console.error("Gagal melakukan autosave:", e);
+  } catch {
+    // Sesi autosave gagal disimpan (misal: storage penuh)
   }
 }
 
@@ -54,8 +54,8 @@ export function clearAutosaveSession(cardId: string): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(getSessionKey(cardId));
-  } catch (e) {
-    console.error("Gagal menghapus autosave session:", e);
+  } catch {
+    // Abaikan kegagalan penghapusan
   }
 }
 
@@ -102,8 +102,8 @@ export function savePackageScores(scores: PackageScoresMap): void {
     const serialized = JSON.stringify(scores);
     localStorage.setItem(STORAGE_KEY_PACKAGE_SCORES, serialized);
     localStorage.setItem("user_scores", serialized);
-  } catch (e) {
-    console.error("Gagal menyimpan package scores:", e);
+  } catch {
+    // Abaikan kegagalan penulisan skor
   }
 }
 

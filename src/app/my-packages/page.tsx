@@ -90,14 +90,10 @@ export default function MyPackagesPage() {
       }
 
       // 3a. Ambil ringkasan skor & jumlah pengerjaan dari view package_score_summary milik user (VIEW Fase 2)
-      const { data: summaryData, error: summaryError } = await supabase
+      const { data: summaryData } = await supabase
         .from("package_score_summary")
         .select("*")
         .eq("user_id", user.id);
-
-      if (summaryError) {
-        console.warn("Peringatan membaca package_score_summary:", summaryError);
-      }
 
       // 3b. Query cadangan langsung dari tabel exam_results milik user (antisipasi jika view belum sync atau RLS view)
       const { data: examResultsData } = await supabase
@@ -238,8 +234,7 @@ export default function MyPackagesPage() {
       });
 
       setExamCards(cards);
-    } catch (err: any) {
-      console.error("Gagal memuat paket:", err);
+    } catch {
       setErrorMessage(
         "Gagal memuat daftar paket soal Anda. Silakan coba beberapa saat lagi."
       );

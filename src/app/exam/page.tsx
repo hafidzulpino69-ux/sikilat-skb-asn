@@ -101,8 +101,8 @@ function ExamEngineContent() {
         if (isMounted && data?.id) {
           setResolvedPackageUuid(data.id);
         }
-      } catch (err) {
-        console.warn("Gagal resolve UUID paket dari Supabase:", err);
+      } catch {
+        // Abaikan error resolving jika terjadi kegagalan jaringan
       }
     }
 
@@ -184,8 +184,36 @@ function ExamEngineContent() {
           return;
         }
 
+        // VALIDASI KEPEMILIKAN PAKET (Security Guard: Cegah manipulasi URL)
+        // User wajib memiliki paket aktif di user_packages (kecuali admin)
+        const isAdmin =
+          user.email === "adminsikilatskb@gmail.com" ||
+          user.user_metadata?.role === "admin";
+
+        if (!isAdmin) {
+          const { data: userPkg } = await supabase
+            .from("user_packages")
+            .select("id, expires_at")
+            .eq("user_id", user.id)
+            .eq("package_id", resolvedPackageUuid)
+            .maybeSingle();
+
+          if (!userPkg) {
+            router.push("/my-packages");
+            return;
+          }
+
+          const isExpired = userPkg.expires_at
+            ? new Date(userPkg.expires_at).getTime() <= Date.now()
+            : false;
+          if (isExpired) {
+            router.push("/my-packages");
+            return;
+          }
+        }
+
         // Cari sesi ujian aktif yang belum selesai (is_finished = false) di Supabase
-        const { data: ongoingSession, error: fetchErr } = await supabase
+        const { data: ongoingSession } = await supabase
           .from("exam_results")
           .select("*")
           .eq("package_id", resolvedPackageUuid)
@@ -194,10 +222,6 @@ function ExamEngineContent() {
           .order("completed_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-
-        if (fetchErr) {
-          console.warn("Gagal mengecek sesi aktif di Supabase:", fetchErr);
-        }
 
         if (ongoingSession && isMounted) {
           // RESTORE DATA DARI SUPABASE (F5 / Refresh Handled)
@@ -219,7 +243,7 @@ function ExamEngineContent() {
           setHasResumed(true);
         } else if (isMounted) {
           // BUAT SESI BARU DI SUPABASE DENGAN is_finished = false
-          const { data: newSession, error: createErr } = await supabase
+          const { data: newSession } = await supabase
             .from("exam_results")
             .insert([
               {
@@ -241,14 +265,12 @@ function ExamEngineContent() {
             .select("id")
             .single();
 
-          if (createErr) {
-            console.warn("Peringatan inisialisasi sesi Supabase:", createErr);
-          } else if (newSession) {
+          if (newSession) {
             setActiveResultId(newSession.id);
           }
         }
-      } catch (err) {
-        console.error("Gagal menginisialisasi sesi ujian di Supabase:", err);
+      } catch {
+        // Fallback hening untuk keamanan produksi
       } finally {
         if (isMounted) setIsSupabaseSessionReady(true);
       }
@@ -286,8 +308,8 @@ function ExamEngineContent() {
             completed_at: new Date().toISOString(),
           })
           .eq("id", activeResultId);
-      } catch (err) {
-        console.warn("Gagal autosave real-time ke Supabase:", err);
+      } catch {
+        // Fallback hening untuk autosave background
       }
     }, 1000);
 
@@ -354,10 +376,6 @@ function ExamEngineContent() {
                 completed_at: new Date().toISOString(),
               })
               .eq("id", activeResultId);
-
-            if (updateError) {
-              console.error("Gagal finalisasi hasil ujian di Supabase:", updateError);
-            }
           } else {
             // Fallback jika activeResultId tidak ada
             await supabase.from("exam_results").insert([
@@ -420,8 +438,7 @@ function ExamEngineContent() {
         setShowFinishModal(false);
         setShowExitWarningModal(false);
         router.push(redirectTo);
-      } catch (err) {
-        console.error("Terjadi kesalahan saat menyimpan hasil ujian:", err);
+      } catch {
         setIsFinished(true);
         isFinishedRef.current = true;
         setShowFinishModal(false);

@@ -58,20 +58,9 @@ function LoginForm() {
           const displayName = userMeta.full_name || email.split("@")[0];
 
           localStorage.setItem(
-            "skb_mock_user",
-            JSON.stringify({
-              id: data.user.id,
-              email: data.user.email,
-              name: displayName,
-              package: selectedPackage || "bundling-skb",
-              isLoggedIn: true,
-              loginTime: new Date().toISOString(),
-            })
-          );
-
-          localStorage.setItem(
             "skb_user",
             JSON.stringify({
+              id: data.user.id,
               name: displayName,
               email: data.user.email,
             })
@@ -81,7 +70,6 @@ function LoginForm() {
         router.push(redirectTo);
       }
     } catch (err: unknown) {
-      console.error("Gagal login:", err);
       const msg =
         err instanceof Error
           ? err.message
