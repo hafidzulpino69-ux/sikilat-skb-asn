@@ -20,9 +20,27 @@ interface DiscussionItemProps {
   userAnswer?: AnswerKey;
 }
 
+/**
+ * Smart Preprocessor (Regex) untuk merapikan teks pembahasan CAT.
+ * Otomatis menyisipkan newline (\n) jika huruf A, B, C, D, atau E kapital
+ * muncul setelah tanda titik (baik berdempetan '.A ' maupun dengan spasi/titik '. A ' / '.A. ').
+ */
+function formatExplanation(rawText?: string): string[] {
+  if (!rawText || !rawText.trim()) return [];
+
+  // Sisipkan newline (\n) sebelum opsi A-E setelah titik
+  const preprocessed = rawText.replace(/\.\s*([A-E])(?=[\s.:\-)])/g, ".\n$1");
+
+  return preprocessed
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export default function DiscussionItem({ question, userAnswer }: DiscussionItemProps) {
   const isCorrect = userAnswer === question.correctAnswer;
   const isUnanswered = !userAnswer;
+  const explanationLines = formatExplanation(question.explanation);
 
   return (
     <div className="space-y-5">
@@ -128,9 +146,23 @@ export default function DiscussionItem({ question, userAnswer }: DiscussionItemP
           <Lightbulb className="w-4 h-4 text-[#FB6E09]" />
           <span>Kunci Jawaban: {question.correctAnswer} • Penjelasan Pembahasan:</span>
         </div>
-        <p className="text-xs sm:text-sm leading-relaxed text-slate-800 font-medium">
-          {question.explanation}
-        </p>
+        {explanationLines.length === 0 ? (
+          <p className="text-xs sm:text-sm text-slate-500 italic">
+            Belum ada pembahasan detail untuk butir soal ini.
+          </p>
+        ) : explanationLines.length > 1 ? (
+          <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm leading-relaxed text-slate-800 font-medium">
+            {explanationLines.map((line, idx) => (
+              <li key={idx} className="pl-1">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs sm:text-sm leading-relaxed text-slate-800 font-medium">
+            {explanationLines[0]}
+          </p>
+        )}
       </div>
     </div>
   );
