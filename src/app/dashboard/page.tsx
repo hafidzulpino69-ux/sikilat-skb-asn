@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -70,6 +70,10 @@ export default function DashboardPage() {
   // Search queries
   const [searchAgency, setSearchAgency] = useState<string>("");
   const [searchPosition, setSearchPosition] = useState<string>("");
+
+  // Section refs for smooth auto-scroll UX
+  const positionSectionRef = useRef<HTMLDivElement | null>(null);
+  const packageSectionRef = useRef<HTMLDivElement | null>(null);
 
   // 1. Fetch data paket ASLI dari database Supabase (Active only)
   const fetchActivePackages = useCallback(async () => {
@@ -280,6 +284,14 @@ export default function DashboardPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem("skb_selected_agency", agencyId);
     }
+
+    // Efek Smooth Auto-Scroll ke bagian Pilih Formasi Jabatan
+    setTimeout(() => {
+      positionSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
   };
 
   const handleSelectPosition = (positionId: string) => {
@@ -287,6 +299,14 @@ export default function DashboardPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem("skb_selected_position", positionId);
     }
+
+    // Efek Smooth Auto-Scroll ke bagian Pilih Paket Soal
+    setTimeout(() => {
+      packageSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
   };
 
   const handleSelectPackageBox = (key: "paket-1" | "paket-2" | "paket-3" | "bundling") => {
@@ -552,7 +572,7 @@ export default function DashboardPage() {
           {/* LANGKAH 2: PILIH JABATAN / FORMASI                                    */}
           {/* --------------------------------------------------------------------- */}
           {currentAgency && (
-            <div className="space-y-4 pt-4 border-t-2 border-[#F0DCBE]">
+            <div ref={positionSectionRef} className="space-y-4 pt-4 border-t-2 border-[#F0DCBE] scroll-mt-24">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-[#042E64] flex items-center gap-2">
@@ -645,7 +665,7 @@ export default function DashboardPage() {
           {/* LANGKAH 3: 4 KOTAK SEJAJAR / BERURUTAN & TOMBOL "LANJUTKAN"           */}
           {/* --------------------------------------------------------------------- */}
           {currentPosition && currentAgency && (
-            <div className="space-y-6 pt-4 border-t-2 border-[#F0DCBE]">
+            <div ref={packageSectionRef} className="space-y-6 pt-4 border-t-2 border-[#F0DCBE] scroll-mt-24">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-[#042E64] flex items-center gap-2">
