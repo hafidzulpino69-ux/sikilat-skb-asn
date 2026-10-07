@@ -28,6 +28,8 @@ interface PendingOrder {
   positionId: string;
   positionTitle: string;
   positionCode: string;
+  packageId?: string;
+  packageIds?: string[];
   packageKey: "paket-1" | "paket-2" | "paket-3" | "bundling";
   packageName: string;
   packageLabel: string;
@@ -74,6 +76,15 @@ export default function PaymentPage() {
         try {
           const parsed = JSON.parse(storedOrder);
           if (parsed && parsed.price) {
+            // Sinkronkan packageId dari URL search params jika ada
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlPackageId = urlParams.get("packageId");
+            if (urlPackageId) {
+              parsed.packageId = urlPackageId;
+              if (parsed.packageKey !== "bundling") {
+                parsed.packageIds = [urlPackageId];
+              }
+            }
             setOrder(parsed);
           } else {
             router.push("/dashboard");
@@ -133,19 +144,58 @@ export default function PaymentPage() {
 
     // 3. Untuk setiap nomor paket, pastikan master di packages ada & simpan akses di user_packages
     for (const num of examNums) {
-      const masterSlug = `${positionSlug}-paket-${num}`;
+      let targetPackageId: string | null = null;
 
-      // 1. Cek apakah master paket sudah ada di katalog packages (berdasarkan agency & formasi atau slug)
-      const { data: existingPkg } = await supabase
-        .from("packages")
-        .select("id")
-        .or(`slug.eq."${masterSlug}",and(agency_name.eq."${order.agencyName}",position_title.eq."${order.positionTitle}",package_number.eq.${num})`)
-        .maybeSingle();
+      // Prioritas 1: Mode Satuan (Paket 1, 2, atau 3) dengan packageId unik langsung
+      if (order.packageKey !== "bundling" && order.packageId) {
+        targetPackageId = order.packageId;
+      }
 
-      let targetPackageId = existingPkg?.id;
+      // Prioritas 2: Mode Bundling dengan list packageIds yang dikirim dari dashboard
+      if (!targetPackageId && order.packageIds && order.packageIds.length > 0) {
+        const { data: matchedById } = await supabase
+          .from("packages")
+          .select("id")
+          .in("id", order.packageIds)
+          .eq("package_number", num)
+          .maybeSingle();
 
+        if (matchedById) {
+          targetPackageId = matchedById.id;
+        }
+      }
+
+      // Prioritas 3: Cari di packages berdasarkan agency, formasi, dan nomor paket eksak
       if (!targetPackageId) {
-        // Pastikan master paket ada di katalog packages (bersifat publik, tanpa kolom user_id)
+        const { data: existingPkg } = await supabase
+          .from("packages")
+          .select("id")
+          .eq("agency_name", order.agencyName)
+          .eq("position_title", order.positionTitle)
+          .eq("package_number", num)
+          .maybeSingle();
+
+        if (existingPkg) {
+          targetPackageId = existingPkg.id;
+        }
+      }
+
+      // Prioritas 4: Cari berdasarkan slug spesifik per nomor paket
+      const masterSlug = `${positionSlug}-paket-${num}`;
+      if (!targetPackageId) {
+        const { data: slugPkg } = await supabase
+          .from("packages")
+          .select("id")
+          .eq("slug", masterSlug)
+          .maybeSingle();
+
+        if (slugPkg) {
+          targetPackageId = slugPkg.id;
+        }
+      }
+
+      // Prioritas 5: Jika belum ada sama sekali di database, buat master baru
+      if (!targetPackageId) {
         const { data: pkgData, error: pkgError } = await supabase
           .from("packages")
           .upsert(
@@ -171,7 +221,7 @@ export default function PaymentPage() {
         targetPackageId = pkgData.id;
       }
 
-      // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT
+      // Catat hak akses pembelian ke tabel user_packages menggunakan UPSERT dengan package_id SPESIFIK
       const { error: userPkgError } = await supabase
         .from("user_packages")
         .upsert(
@@ -222,21 +272,45 @@ export default function PaymentPage() {
           ? order.examNumbers
           : [1];
 
-      const positionSlug = (order.positionId || order.positionTitle)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      // 2. Kumpulkan ID kandidat paket secara spesifik murni sesuai paket yang dipilih
+      let candidatePkgIds: string[] = [];
 
-      // Cek apakah master packages untuk paket ini sudah pernah dibuat
-      const targetSlugs = examNums.map((num) => `${positionSlug}-paket-${num}`);
-      const { data: matchedPackages } = await supabase
-        .from("packages")
-        .select("id, slug")
-        .or(`slug.in.(${targetSlugs.join(",")}),and(agency_name.eq."${order.agencyName}",position_title.eq."${order.positionTitle}")`);
+      if (order.packageKey !== "bundling" && order.packageId) {
+        // Mode Satuan: HANYA periksa packageId unik yang dipilih!
+        candidatePkgIds = [order.packageId];
+      } else if (order.packageIds && order.packageIds.length > 0) {
+        // Mode Bundling: periksa list packageIds yang dikirim
+        candidatePkgIds = order.packageIds;
+      } else {
+        // Fallback: Cari di database HANYA untuk nomor paket terkait (examNums), JANGAN campur nomor paket lain!
+        const { data: foundPkgs } = await supabase
+          .from("packages")
+          .select("id")
+          .eq("agency_name", order.agencyName)
+          .eq("position_title", order.positionTitle)
+          .in("package_number", examNums);
 
-      // Jika ada paket master yang cocok, cek ke user_packages untuk user ini
-      if (matchedPackages && matchedPackages.length > 0) {
-        const candidatePkgIds = matchedPackages.map((p) => p.id);
+        if (foundPkgs && foundPkgs.length > 0) {
+          candidatePkgIds = foundPkgs.map((p) => p.id);
+        } else {
+          const positionSlug = (order.positionId || order.positionTitle)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "");
+          const targetSlugs = examNums.map((num) => `${positionSlug}-paket-${num}`);
+          const { data: matchedPkgs } = await supabase
+            .from("packages")
+            .select("id")
+            .in("slug", targetSlugs);
+
+          if (matchedPkgs) {
+            candidatePkgIds = matchedPkgs.map((p) => p.id);
+          }
+        }
+      }
+
+      // 3. Validasi kepemilikan paket HANYA untuk candidatePkgIds yang bersangkutan
+      if (candidatePkgIds.length > 0) {
         const { data: ownedList } = await supabase
           .from("user_packages")
           .select("package_id")
@@ -244,7 +318,7 @@ export default function PaymentPage() {
           .in("package_id", candidatePkgIds);
 
         if (ownedList && ownedList.length > 0) {
-          // PAKET SUDAH DIMILIKI -> Tampilkan RepurchaseWarningModal
+          // Hanya tampilkan modal jika user BENAR-BENAR sudah memiliki paket SPESIFIK ini
           setRepurchasePackageIds(ownedList.map((item) => item.package_id));
           setShowRepurchaseModal(true);
           setIsProcessing(false);

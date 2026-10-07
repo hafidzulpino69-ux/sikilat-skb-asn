@@ -66,6 +66,7 @@ export default function DashboardPage() {
   const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
   const [selectedPositionId, setSelectedPositionId] = useState<string>("");
   const [selectedPackageKey, setSelectedPackageKey] = useState<"paket-1" | "paket-2" | "paket-3" | "bundling">("bundling");
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("");
 
   // Search queries
   const [searchAgency, setSearchAgency] = useState<string>("");
@@ -309,8 +310,32 @@ export default function DashboardPage() {
     }, 50);
   };
 
+  // Resolusi ID paket spesifik (UUID) dari Supabase sesuai nomor paket yang dipilih
+  useEffect(() => {
+    if (!currentPosition) return;
+    const pkgNum =
+      selectedPackageKey === "paket-1"
+        ? 1
+        : selectedPackageKey === "paket-2"
+        ? 2
+        : selectedPackageKey === "paket-3"
+        ? 3
+        : 1;
+    const targetPkg = currentPosition.packages.find((p) => p.package_number === pkgNum);
+    if (targetPkg?.id) {
+      setSelectedPackageId(targetPkg.id);
+    }
+  }, [currentPosition, selectedPackageKey]);
+
   const handleSelectPackageBox = (key: "paket-1" | "paket-2" | "paket-3" | "bundling") => {
     setSelectedPackageKey(key);
+    if (currentPosition) {
+      const pkgNum = key === "paket-1" ? 1 : key === "paket-2" ? 2 : key === "paket-3" ? 3 : 1;
+      const targetPkg = currentPosition.packages.find((p) => p.package_number === pkgNum);
+      if (targetPkg?.id) {
+        setSelectedPackageId(targetPkg.id);
+      }
+    }
     if (typeof window !== "undefined") {
       localStorage.setItem("skb_selected_package_key", key);
     }
@@ -323,6 +348,29 @@ export default function DashboardPage() {
     const chosenPackage = packageBoxes.find((p) => p.packageKey === selectedPackageKey);
     if (!chosenPackage) return;
 
+    // Tentukan UUID spesifik dari paket yang dipilih murni dari Supabase
+    let specificPackageId = selectedPackageId;
+    let specificPackageIds: string[] = [];
+
+    if (selectedPackageKey === "paket-1") {
+      const p = currentPosition.packages.find((pkg) => pkg.package_number === 1);
+      specificPackageId = p?.id || specificPackageId;
+      if (specificPackageId) specificPackageIds = [specificPackageId];
+    } else if (selectedPackageKey === "paket-2") {
+      const p = currentPosition.packages.find((pkg) => pkg.package_number === 2);
+      specificPackageId = p?.id || specificPackageId;
+      if (specificPackageId) specificPackageIds = [specificPackageId];
+    } else if (selectedPackageKey === "paket-3") {
+      const p = currentPosition.packages.find((pkg) => pkg.package_number === 3);
+      specificPackageId = p?.id || specificPackageId;
+      if (specificPackageId) specificPackageIds = [specificPackageId];
+    } else if (selectedPackageKey === "bundling") {
+      specificPackageIds = currentPosition.packages
+        .filter((pkg) => [1, 2, 3].includes(pkg.package_number))
+        .map((pkg) => pkg.id);
+      specificPackageId = specificPackageIds[0] || specificPackageId;
+    }
+
     const pendingOrder = {
       agencyId: currentAgency.id,
       agencyName: currentAgency.name,
@@ -330,6 +378,8 @@ export default function DashboardPage() {
       positionId: currentPosition.id,
       positionTitle: currentPosition.title,
       positionCode: currentPosition.id.toUpperCase(),
+      packageId: specificPackageId,
+      packageIds: specificPackageIds,
       packageKey: chosenPackage.packageKey,
       packageName: chosenPackage.name,
       packageLabel: chosenPackage.label,
@@ -343,7 +393,11 @@ export default function DashboardPage() {
       localStorage.setItem("skb_pending_order", JSON.stringify(pendingOrder));
     }
 
-    router.push("/payment");
+    // Arahkan ke payment dengan parameter packageId spesifik
+    const queryParam = specificPackageId
+      ? `?packageId=${encodeURIComponent(specificPackageId)}`
+      : "";
+    router.push(`/payment${queryParam}`);
   };
 
   return (

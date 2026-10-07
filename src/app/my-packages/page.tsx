@@ -136,8 +136,6 @@ export default function MyPackagesPage() {
           const score = Number(row.highest_score) || 0;
           const attempts = Number(row.attempts_count) || 0;
           if (row.package_id) setSummary(row.package_id, score, attempts, row.last_completed_at);
-          if (row.slug) setSummary(row.slug, score, attempts, row.last_completed_at);
-          if (row.title) setSummary(row.title, score, attempts, row.last_completed_at);
         });
       }
 
@@ -184,9 +182,7 @@ export default function MyPackagesPage() {
       const cards: ExamCardItem[] = finalCardsData.map((pkg: any) => {
         const summary =
           summaryMap.get(pkg.id) ||
-          summaryMap.get(pkg.slug) ||
-          summaryMap.get(pkg.user_package_id) ||
-          summaryMap.get(pkg.title) || {
+          summaryMap.get(pkg.user_package_id) || {
             highest_score: 0,
             attempts_count: 0,
             last_completed_at: undefined,
