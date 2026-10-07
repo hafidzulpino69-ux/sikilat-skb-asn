@@ -100,46 +100,41 @@ export default function AdminMasterDashboardPage() {
     checkAdminAuth();
   }, []);
 
-  // 2. Fetch seluruh paket dan agregasi jumlah soal dari Supabase
+  // 2. Fetch seluruh paket dan agregasi jumlah soal dari Supabase secara real-time
   const fetchPackages = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // Ambil seluruh data paket
+      // Ambil seluruh data paket beserta hitungan jumlah butir soal riil via questions(count)
       const { data: pkgs, error: pkgErr } = await supabase
         .from("packages")
-        .select("*")
+        .select("*, questions(count)")
         .order("created_at", { ascending: false });
 
       if (pkgErr) throw pkgErr;
 
-      // Ambil data hitungan soal per package_id secara terpisah untuk performa & akurasi
-      const { data: questionsData, error: qErr } = await supabase
-        .from("questions")
-        .select("package_id");
+      const formattedPackages: PackageRecord[] = (pkgs || []).map((p: any) => {
+        let questionCount = 0;
+        if (Array.isArray(p.questions) && p.questions.length > 0) {
+          questionCount = Number(p.questions[0].count) || 0;
+        } else if (p.questions && typeof p.questions === "object" && "count" in p.questions) {
+          questionCount = Number((p.questions as { count?: unknown }).count) || 0;
+        }
 
-      const questionCountMap: Record<string, number> = {};
-      if (!qErr && questionsData) {
-        questionsData.forEach((q) => {
-          if (q.package_id) {
-            questionCountMap[q.package_id] = (questionCountMap[q.package_id] || 0) + 1;
-          }
-        });
-      }
-
-      const formattedPackages: PackageRecord[] = (pkgs || []).map((p) => ({
-        id: p.id,
-        slug: p.slug,
-        title: p.title,
-        agency_name: p.agency_name,
-        position_title: p.position_title,
-        package_number: p.package_number,
-        total_questions: p.total_questions || 100,
-        duration_minutes: p.duration_minutes || 90,
-        max_score: p.max_score || 500,
-        is_active: p.is_active ?? true,
-        created_at: p.created_at,
-        question_count: questionCountMap[p.id] || 0,
-      }));
+        return {
+          id: p.id,
+          slug: p.slug,
+          title: p.title,
+          agency_name: p.agency_name,
+          position_title: p.position_title,
+          package_number: p.package_number,
+          total_questions: p.total_questions || 100,
+          duration_minutes: p.duration_minutes || 90,
+          max_score: p.max_score || 500,
+          is_active: p.is_active ?? true,
+          created_at: p.created_at,
+          question_count: questionCount,
+        };
+      });
 
       setPackages(formattedPackages);
     } catch {
